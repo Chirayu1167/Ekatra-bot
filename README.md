@@ -32,6 +32,60 @@ curl http://localhost:3000/health
 # {"status":"ok"}
 ```
 
+## How to run (local development)
+
+Every time you develop, do these 3 steps in order:
+
+### 1. Start the app server
+
+```bash
+npm run dev
+```
+
+Leave it running. Confirm it is up with `curl http://localhost:3000/health`.
+
+### 2. Start the Cloudflare tunnel
+
+In a **second terminal** (keep the app running), expose your local server over HTTPS:
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+It prints a public URL like `https://<something>.trycloudflare.com`.
+Keep this terminal open — closing it kills the URL.
+
+Then set that URL in `.env` (no trailing slash) and **restart the app** so
+signature validation uses the exact public URL:
+
+```text
+PUBLIC_BASE_URL=https://<something>.trycloudflare.com
+```
+
+> The free Cloudflare URL changes every time you restart `cloudflared`,
+> so you must repeat step 3 each time it changes.
+
+### 3. Update the webhook on your Twilio number
+
+1. Open the [Twilio Console](https://www.twilio.com/console) → Messaging →
+   Senders → WhatsApp senders → open your number → **Edit sender**
+   (for the sandbox: Messaging → Try it out → Send a WhatsApp message).
+2. Find **"When a message comes in"**, set the method to **`POST`**.
+3. Set the URL to your current tunnel URL plus the webhook path:
+
+   ```text
+   https://<something>.trycloudflare.com/webhooks/whatsapp
+   ```
+
+4. Save.
+5. From your phone, send `hello` to the Twilio WhatsApp number — you should get
+   the bot's reply, and see `whatsapp.message.received` /
+   `whatsapp.message.replied` in the app logs.
+
+If replies stop after restarting `cloudflared`, the tunnel URL changed —
+copy the new URL into both `.env` (`PUBLIC_BASE_URL`, then restart the app)
+and the Twilio sender webhook.
+
 ## Environment variables
 
 | Variable                  | Required | Description                                                                                       |
