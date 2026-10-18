@@ -1,0 +1,86 @@
+# Local/deployment package: PostgreSQL 18 matches CI and embedded tests.
+# Production deployments should provide managed PostgreSQL and separate app/migration URLs.
+services:
+  postgres:
+    image: postgres:18
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ekatra
+      POSTGRES_PASSWORD: ekatra-dev-only
+      POSTGRES_DB: ekatra
+    volumes:
+      - ekatra-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ekatra -d ekatra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    image: ekatra-bot:phase6
+    command: ["npm", "run", "migrate:prod"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgres://ekatra:ekatra-dev-only@postgres:5432/ekatra}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgres://ekatra:ekatra-dev-only@postgres:5432/ekatra}
+      DATABASE_SSL: ${DATABASE_SSL:-off}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    image: ekatra-bot:phase6
+    command: ["node", "dist/server.js"]
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: "3000"
+      DATABASE_URL: ${APP_DATABASE_URL:-postgres://ekatra:ekatra-dev-only@postgres:5432/ekatra}
+      DATABASE_SSL: ${DATABASE_SSL:-off}
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-false}
+      MEDIA_DIR: /app/media
+    volumes:
+      - ekatra-media:/app/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build: .
+    image: ekatra-bot:phase6
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: ${APP_DATABASE_URL:-postgres://ekatra:ekatra-dev-only@postgres:5432/ekatra}
+      DATABASE_SSL: ${DATABASE_SSL:-off}
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-false}
+      MEDIA_DIR: /app/media
+    volumes:
+      - ekatra-media:/app/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  ekatra-pgdata:
+  ekatra-media:

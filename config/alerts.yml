@@ -1,0 +1,133 @@
+# Ekatra alerting rules (Stage 1 production)
+#
+# These rules are evaluated against the /metrics Prometheus endpoint exposed by
+# each API and worker instance. Alerts fire when a condition holds for `for`
+# duration. `severity` drives paging vs ticketing; `owner` is the named recipient.
+#
+# Thresholds are starting points; tune against real staging load before production.
+
+groups:
+  - name: ekatra_worker
+    rules:
+      - alert: WorkerDown
+        expr: ekatra_worker_heartbeat_age_seconds > 300
+        for: 5m
+        severity: critical
+        owner: platform-oncall@example.com
+        summary: "Worker heartbeat stale for more than 5 minutes"
+        description: |
+          No worker heartbeat has been recorded within the last 5 minutes.
+          The worker process may be dead or unresponsive. Delivery will stall.
+
+      - alert: WorkerHeartbeatStale
+        expr: ekatra_worker_heartbeat_age_seconds > 120
+        for: 2m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "Worker heartbeat age above 2 minutes"
+        description: |
+          Worker heartbeat is older than 2 minutes. Check worker process health.
+
+      - alert: QueueDepthHigh
+        expr: sum by (kind) (ekatra_jobs_depth{status="queued"}) > 100
+        for: 10m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "High queue depth for {{ $labels.kind }} jobs"
+        description: |
+          More than 100 {{ $labels.kind }} jobs are queued. The worker may be
+          falling behind on delivery or inbound processing.
+
+  - name: ekatra_delivery
+    rules:
+      - alert: DeliveryFailureRateHigh
+        expr: |
+          sum(rate(ekatra_outbound_message_attempts_total{outcome="permanent"}[5m])) /
+          sum(rate(ekatra_outbound_message_attempts_total[5m])) > 0.05
+        for: 10m
+        severity: critical
+        owner: platform-oncall@example.com
+        summary: "High permanent delivery failure rate"
+        description: |
+          More than 5% of outbound send attempts are permanent failures over the
+          last 5 minutes. Check Twilio errors, opt-outs, and template approval.
+
+      - alert: UnknownOutcomeDetected
+        expr: increase(ekatra_outbound_messages_total{outcome="unknown"}[1h]) > 0
+        for: 0m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "Uncertain message delivery outcomes detected"
+        description: |
+          One or more messages have an unknown delivery outcome (timeout/crash
+          after send). These require manual reconciliation via status callback
+          or Twilio lookup before they can be retried safely.
+
+      - alert: DeadLetterAccumulating
+        expr: increase(ekatra_dead_letters_total[1h]) > 10
+        for: 15m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "Dead letters accumulating"
+        description: |
+          More than 10 new dead letters in the last hour. Review
+          GET /admin/failures and replay or discard as appropriate.
+
+  - name: ekatra_api
+    rules:
+      - alert: APIErrorRateHigh
+        expr: |
+          sum(rate(ekatra_api_requests_total{status_code=~"5.."}[5m])) /
+          sum(rate(ekatra_api_requests_total[5m])) > 0.05
+        for: 10m
+        severity: critical
+        owner: platform-oncall@example.com
+        summary: "High API 5xx error rate"
+        description: |
+          More than 5% of API requests return 5xx over the last 5 minutes.
+
+      - alert: APILatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(ekatra_api_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "API p95 latency above 1 second"
+        description: |
+          p95 API request latency exceeds 1 second, approaching the Twilio
+          webhook timeout window.
+
+  - name: ekatra_llm
+    rules:
+      - alert: LLMUnavailable
+        expr: increase(ekatra_llm_calls_total{outcome="timeout"}[10m]) > 10
+        for: 10m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "LLM timeouts elevated"
+        description: |
+          More than 10 LLM timeouts in 10 minutes. Lesson delivery is not
+          affected (LLM is optional), but learner Q&A will degrade.
+
+      - alert: LLMErrorRateHigh
+        expr: |
+          sum(rate(ekatra_llm_calls_total{outcome=~"error|http_error"}[10m])) /
+          sum(rate(ekatra_llm_calls_total[10m])) > 0.5
+        for: 10m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "High LLM error rate"
+        description: |
+          More than 50% of LLM calls are failing over the last 10 minutes.
+          Check Ollama availability and upstream model health.
+
+  - name: ekatra_optout
+    rules:
+      - alert: OptOutSpike
+        expr: increase(ekatra_opt_outs_total[1h]) > 50
+        for: 0m
+        severity: warning
+        owner: platform-oncall@example.com
+        summary: "Spike in learner opt-outs"
+        description: |
+          More than 50 learners opted out in the last hour. Review recent
+          message content and delivery frequency for potential issues.

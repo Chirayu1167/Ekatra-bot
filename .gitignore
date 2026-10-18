@@ -1,0 +1,27 @@
+node_modules
+dist
+**/node_modules/
+dist/
+admin-ui/dist/
+coverage/
+data/
+media/
+reference/
+*.zip
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.log
+*.sqlite
+*.db
+*.db-wal
+*.db-shm
+# Phase progress reports — project records, not source
+PHASE*_PROGRESS.md
+PHASE*_REPORT.md
+PHASE*_DECISIONS.md
+PHASE*_PROMPT.md
+PHASE*_STATUS.md
+PHASE*_STEP*_REPORT.md
+PHASE*_FOLLOWUP_REPORT.md

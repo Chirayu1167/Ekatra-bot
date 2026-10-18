@@ -1,0 +1,68 @@
+# CI: reproducible build gate (Postgres 18) + full suite against a real database.
+# Fails on any error. Pinned: Node 24.16.0, postgres:18 (also the production recommendation).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Tests provision an isolated database each on this server (never the app's DATABASE_URL).
+      EKATRA_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.16.0"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            admin-ui/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix admin-ui
+      - name: Install PostgreSQL client tools (backup/restore proof)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Root typecheck
+        run: npm run typecheck
+      - name: Root lint
+        run: npm run lint
+      - name: Root tests
+        run: npm test
+      - name: Root build (includes admin UI)
+        run: npm run build
+      - name: Admin UI typecheck
+        run: npm run typecheck --prefix admin-ui
+      - name: Admin UI lint
+        run: npm run lint --prefix admin-ui
+      - name: Admin UI tests
+        run: npm test --prefix admin-ui
+      - name: Admin UI build
+        run: npm run build --prefix admin-ui
+      - name: Phase 3 worker entry compiled
+        run: test -f dist/worker.js && node -e "console.log('worker entry ok')"
+      - name: Build Docker image (no push)
+        run: docker build -t ekatra-bot:ci .
+      - name: Root dependency audit (report only)
+        run: npm audit || true
+        continue-on-error: true
+      - name: Admin UI dependency audit (report only)
+        run: npm audit --prefix admin-ui || true
+        continue-on-error: true
