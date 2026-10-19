@@ -9,7 +9,7 @@ or real secrets. All values below are placeholders.
 npm ci
 npm run typecheck
 npm run lint
-npm test        # expect 348 passed + 1 explicit skip (backup proof needs pg_dump), 25 files
+npm test        # expect 445 passed + 1 explicit skip (backup proof needs pg_dump), 36 files
 npm run build
 ```
 

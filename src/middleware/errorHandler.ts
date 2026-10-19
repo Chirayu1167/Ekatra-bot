@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { AppError } from '../errors';
-import { serializeError, type Logger } from '../logger';
+import { maskPhone, serializeError, type Logger } from '../logger';
 
 export const notFoundHandler: RequestHandler = (_req, res) => {
   res.status(404).json({ error: { code: 'not_found', message: 'Not found' } });
@@ -41,7 +41,7 @@ export function createErrorHandler(logger: Logger): ErrorRequestHandler {
     const log = status >= 500 ? logger.error : logger.warn;
     log('request.failed', {
       method: req.method,
-      path: req.path,
+      path: maskPhone(req.path),
       status,
       code,
       error: serializeError(err instanceof AppError && err.cause ? err.cause : err),

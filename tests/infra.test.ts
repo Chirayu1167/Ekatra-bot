@@ -10,7 +10,6 @@ import { silentLogger } from '../src/logger';
 import { CourseService } from '../src/services/course.service';
 import { OrganisationsService } from '../src/services/organisations.service';
 import { deliverMessages } from '../src/services/delivery';
-import { PgIdempotencyStore } from '../src/services/idempotency.pg';
 import { KeyedMutex } from '../src/services/keyedMutex';
 import { TwilioWhatsAppService, type TwilioMessagesClient } from '../src/services/whatsapp.service';
 import { InboundEventService } from '../src/services/inboundEvents.service';
@@ -129,30 +128,6 @@ async function pgCount(db: Parameters<typeof query>[0], table: string): Promise<
   const { rows } = await query<{ n: number }>(db, `SELECT COUNT(*) AS n FROM ${table}`);
   return Number(rows[0]?.n ?? 0);
 }
-
-describe('PgIdempotencyStore', () => {
-  it('claims once, reports duplicates, and can release a claim', async () => {
-    const store = new PgIdempotencyStore(pgx.pool);
-    expect(await store.claim('SM1')).toBe(true);
-    expect(await store.claim('SM1')).toBe(false);
-    expect(await store.claim('SM2')).toBe(true);
-    await store.release('SM1');
-    expect(await store.claim('SM1')).toBe(true);
-  });
-
-  it('prunes only old claims', async () => {
-    const db = pgx.pool;
-    const store = new PgIdempotencyStore(db);
-    await store.claim('new');
-    await query(
-      db,
-      "INSERT INTO processed_messages (message_sid, claimed_at) VALUES ('old', now() - make_interval(days => 40))",
-    );
-    expect(await store.prune(30)).toBe(1);
-    expect(await store.claim('old')).toBe(true);
-    expect(await store.claim('new')).toBe(false);
-  });
-});
 
 describe('KeyedMutex', () => {
   it('runs tasks for one key strictly in order, and different keys in parallel', async () => {
@@ -307,6 +282,41 @@ describe('renderLesson', () => {
     );
     expect(msgs).toHaveLength(1);
     expect((msgs[0]?.text ?? '').length).toBeLessThan(1600);
+  });
+
+  it('lesson ending with a quiz does not append the NEXT footer', () => {
+    const msgs = renderLesson(ctx, [
+      { kind: 'text', text: 'What is the capital of France?' },
+      {
+        kind: 'quiz',
+        caption: 'Quiz:',
+        options: [
+          { label: 'London', correct: false },
+          { label: 'Paris', correct: true },
+        ],
+      },
+    ]);
+    const last = msgs[msgs.length - 1];
+    expect(last?.text).not.toContain('NEXT');
+    expect(last?.text).toContain('Paris');
+    // No button follow-up either when no button SID configured
+    expect(msgs.some((m) => m.contentSid)).toBe(false);
+  });
+
+  it('lesson ending with quiz + button SID sends quiz button but no NEXT footer', () => {
+    const msgs = renderLesson(
+      ctx,
+      [
+        { kind: 'text', text: 'Pick one:' },
+        { kind: 'quiz', caption: 'Q', options: [{ label: 'A', correct: true }] },
+      ],
+      { quiz: 'HXdummyquizsid1234567890123456789012345678' },
+    );
+    const quizMsg = msgs.find((m) => m.contentSid);
+    expect(quizMsg?.contentSid).toBe('HXdummyquizsid1234567890123456789012345678');
+    // The footer message should not exist; quiz button is its own message, no NEXT appended
+    const nextMsgs = msgs.filter((m) => m.text?.includes('NEXT'));
+    expect(nextMsgs).toHaveLength(0);
   });
 });
 

@@ -1,5 +1,5 @@
 import { silentLogger, type Logger } from '../logger';
-import { recordLlmCall } from './metrics.service';
+import { recordLlmCall, recordLlmTokens } from './metrics.service';
 import type { LlmClient } from './courseTutor';
 
 export interface LLMServiceConfig {
@@ -54,12 +54,14 @@ export class LLMService implements LlmClient {
       });
       if (!response.ok) {
         recordLlmCall(this.config.model, 'http_error');
+        recordLlmTokens(this.config.model, 'input', Math.ceil((system.length + user.length) / 4));
         this.logger.warn('llm.request_failed', { status: response.status, model: this.config.model });
         return null;
       }
       const data = (await response.json()) as { message?: { content?: string } };
       const content = data.message?.content?.trim() || null;
       recordLlmCall(this.config.model, content ? 'success' : 'empty');
+      if (content) recordLlmTokens(this.config.model, 'output', Math.ceil(content.length / 4));
       return content;
     } catch (err) {
       const timedOut = err instanceof DOMException && err.name === 'TimeoutError';

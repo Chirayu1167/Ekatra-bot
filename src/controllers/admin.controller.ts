@@ -947,6 +947,10 @@ export function createAdminController({
       const enr = enrRow.rows[0];
       if (!enr) throw new NotFoundError('Enrollment not found');
 
+      if (optOuts && await optOuts.isOptedOut(enr.user_id)) {
+        throw new ConflictError('Learner has opted out; certificate cannot be resent.');
+      }
+
       const cooldownMs = Number(process.env.CERT_RESEND_COOLDOWN_MINUTES ?? 10) * 60 * 1000;
 
       // Cooldown check, outbound insert and cooldown mark commit atomically under a row lock:
