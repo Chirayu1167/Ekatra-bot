@@ -18,7 +18,7 @@ function SignIn() {
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!loading && session) navigate({ to: "/dashboard", search: { org: "" } });
+    if (!loading && session) navigate({ to: "/dashboard" });
   }, [loading, navigate, session]);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -28,7 +28,7 @@ function SignIn() {
     setSubmitError(null);
     try {
       await signIn(key.trim(), keepOnThisTab);
-      navigate({ to: "/dashboard", search: { org: "" } });
+      navigate({ to: "/dashboard" });
     } catch (cause) {
       setSubmitError(cause instanceof Error ? cause.message : "Sign in failed");
     } finally {

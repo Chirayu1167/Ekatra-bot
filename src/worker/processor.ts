@@ -19,6 +19,7 @@ import type { OutboundService } from '../services/outbound.service';
 import type { WhatsAppSender } from '../services/whatsapp.service';
 import { LOCK_CLASS } from '../services/lockNamespaces';
 import { recordOutboundAttempt, recordOutboundMessage, recordDeadLetter } from '../services/metrics.service';
+import type { VoiceServices } from '../services/voice.service';
 
 export interface ProcessorDeps {
   db: PgDb;
@@ -41,6 +42,10 @@ export interface ProcessorDeps {
   inbound: InboundEventService;
   jobs: JobService;
   outbound: OutboundService;
+  /** Voice services (STT for inbound voice notes, TTS for outbound audio). Optional. */
+  voiceServices?: VoiceServices;
+  /** Twilio credentials for downloading protected media URLs (voice notes). */
+  twilioAuth?: { accountSid: string; authToken: string };
   logger?: Logger;
   workerId?: string;
   /** Crash-recovery horizon for stuck jobs/events. Default 300s. */
@@ -297,9 +302,36 @@ async function handleInboundJob(deps: ProcessorDeps, job: Job): Promise<string> 
     return 'already_completed';
   }
 
+  // Voice input: transcribe incoming voice notes before handing to the chatbot.
+  let learnerText = event.body;
+  if (deps.voiceServices?.stt && deps.twilioAuth) {
+    try {
+      const numMedia = Number(event.raw['NumMedia'] ?? 0);
+      const mediaUrl = String(event.raw['MediaUrl0'] ?? '');
+      const contentType = String(event.raw['MediaContentType0'] ?? '');
+      if (numMedia > 0 && mediaUrl && contentType.startsWith('audio/')) {
+        const transcribed = await deps.voiceServices.stt.transcribe(
+          { mediaUrl, contentType },
+          deps.twilioAuth,
+        );
+        if (transcribed) {
+          learnerText = transcribed;
+          log.info('voice.stt.transcribed', { messageSid, chars: transcribed.length });
+        } else {
+          log.warn('voice.stt.empty', { messageSid });
+        }
+      }
+    } catch (err) {
+      log.warn('voice.stt.error', {
+        messageSid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   let reply;
   try {
-    reply = await deps.chatbot.handleMessage({ userId: event.fromUser, text: event.body, messageId: messageSid });
+    reply = await deps.chatbot.handleMessage({ userId: event.fromUser, text: learnerText, messageId: messageSid });
   } catch (err) {
     // chatbot threw (a bug, or a downed LLM path): retry with backoff, then a
     // visible dead letter — never an infinite loop, never silent.
@@ -337,6 +369,23 @@ async function handleInboundJob(deps: ProcessorDeps, job: Job): Promise<string> 
     },
     ...(reply.followUps ?? []),
   ];
+  // Voice output: synthesize reply text into audio messages when TTS is enabled.
+  const tts = deps.voiceServices?.tts;
+  if (tts) {
+    const synthesizeMessage = async (m: ReplyMessage): Promise<ReplyMessage> => {
+      if (!m.text || m.mediaUrl || m.contentSid) return m;
+      const audioUrl = await tts.synthesize(m.text);
+      if (audioUrl) return { ...m, mediaUrl: audioUrl };
+      return m;
+    };
+    const first = messages[0];
+    if (first) messages[0] = await synthesizeMessage(first);
+    for (let i = 1; i < messages.length; i++) {
+      const m = messages[i];
+      if (m) messages[i] = await synthesizeMessage(m);
+    }
+  }
+
   const action = reply.deliveryAction ?? { type: 'none' as const };
   const idempotencyKey = `inbound:${messageSid}`;
   // Attribute the send to its org (for org-scoped failure listing): prefer the

@@ -1,5 +1,8 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createApp } from '../src/app';
 import { parseCommand } from '../src/bot/commands';
 import { renderLesson } from '../src/bot/lessonRenderer';
@@ -437,13 +440,23 @@ createApp({
       });
 
   it('serves the sample files with the right Content-Type (Twilio checks it)', async () => {
-    const a = app('./media');
-    const pdf = await request(a).get('/media/sample.pdf');
-    expect(pdf.status).toBe(200);
-    expect(pdf.headers['content-type']).toBe('application/pdf');
-    expect(pdf.headers['content-disposition']).toContain('sample.pdf');
-    const png = await request(a).get('/media/sample.png');
-    expect(png.headers['content-type']).toBe('image/png');
+    const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ekatra-media-'));
+    fs.writeFileSync(path.join(mediaDir, 'sample.pdf'), '%PDF-1.4\n%%EOF\n');
+    fs.writeFileSync(
+      path.join(mediaDir, 'sample.png'),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+    try {
+      const a = app(mediaDir);
+      const pdf = await request(a).get('/media/sample.pdf');
+      expect(pdf.status).toBe(200);
+      expect(pdf.headers['content-type']).toBe('application/pdf');
+      expect(pdf.headers['content-disposition']).toContain('sample.pdf');
+      const png = await request(a).get('/media/sample.png');
+      expect(png.headers['content-type']).toBe('image/png');
+    } finally {
+      fs.rmSync(mediaDir, { recursive: true, force: true });
+    }
   });
 
   it('does not list the folder, serve outside it, or exist when not configured', async () => {

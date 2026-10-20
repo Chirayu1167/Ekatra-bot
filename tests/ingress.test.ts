@@ -340,6 +340,8 @@ describe('security headers and CORS', () => {
 
 describe('/media is public but cannot leak or traverse', () => {
   it('serves files, refuses listings and path traversal', async () => {
+    const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ekatra-media-'));
+    fs.writeFileSync(path.join(mediaDir, 'sample.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     const app = createApp({
     env: {
       TWILIO_AUTH_TOKEN: AUTH_TOKEN,
@@ -358,10 +360,11 @@ describe('/media is public but cannot leak or traverse', () => {
         logger: silentLogger,
       },
       logger: silentLogger,
-      mediaDir: './media',
+      mediaDir,
     });
     expect((await request(app).get('/media/sample.png')).status).toBe(200);
     expect((await request(app).get('/media/')).status).toBe(404);
     expect((await request(app).get('/media/../package.json')).status).toBe(404);
+    fs.rmSync(mediaDir, { recursive: true, force: true });
   });
 });

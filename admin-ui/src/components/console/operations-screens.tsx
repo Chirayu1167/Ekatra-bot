@@ -4,15 +4,8 @@ import { adminApi, type DeliveryMessage, type Failure, type User } from "@/api/a
 import { useAuth } from "@/api/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  ConsoleShell,
-  ConfirmDialog,
-  DataTable,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  StatusBadge,
-} from "./shared";
+import { ConsoleShell } from "@/components/console/console-shell";
+import { ConfirmDialog, DataTable, EmptyState, ErrorState, LoadingState, StatusBadge } from "./shared";
 
 const PAGE_SIZE = 20;
 

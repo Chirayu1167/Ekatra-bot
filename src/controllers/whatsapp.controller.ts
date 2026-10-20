@@ -18,10 +18,19 @@ export function parseIncomingMessage(payload: unknown): IncomingWhatsAppMessage 
     const fields = result.error.issues.map((i) => i.path.join('.') || 'body').join(', ');
     throw new BadRequestError(`Invalid webhook payload: ${fields}`);
   }
-  const { MessageSid, From, To, Body, ButtonPayload } = result.data;
+  const { MessageSid, From, To, Body, ButtonPayload, NumMedia, MediaUrl0, MediaContentType0 } =
+    result.data;
   // A tapped button sends its `id` (e.g. "NEXT") as ButtonPayload, which we treat as the command.
   const tapped = ButtonPayload?.trim();
-  return { messageSid: MessageSid, from: From, to: To, body: tapped || Body };
+  return {
+    messageSid: MessageSid,
+    from: From,
+    to: To,
+    body: tapped || Body,
+    numMedia: NumMedia,
+    mediaUrl: MediaUrl0,
+    mediaContentType: MediaContentType0,
+  };
 }
 
 /**

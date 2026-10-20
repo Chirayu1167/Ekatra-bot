@@ -4,7 +4,8 @@ import { adminApi, type Schedule } from "@/api/admin";
 import { useAuth } from "@/api/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ConsoleShell, EmptyState, ErrorState, LoadingState } from "./shared";
+import { ConsoleShell } from "@/components/console/console-shell";
+import { EmptyState, ErrorState, LoadingState } from "./shared";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const maskPhone = (value: string) => `•••• ${value.replace(/\D/g, "").slice(-4)}`;

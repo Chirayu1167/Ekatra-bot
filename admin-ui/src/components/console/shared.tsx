@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAuth } from "@/api/auth-context";
-import { Header } from "@/components/layout/header";
+import Header from "@/components/layout/header";
 import { navigationForRole } from "@/components/layout/navigation";
 import { setOrganizationScope } from "@/api/session";
 
@@ -37,20 +37,7 @@ export function ConsoleShell({ title, children }: { title: string; children: Rea
         </nav>
       </aside>
       <div className="min-w-0 flex-1">
-        <Header
-          orgName={session.orgSlug}
-          orgSlug={session.orgSlug}
-          role={session.role}
-          selectedOrg={selectedOrg}
-          onOrgSwitch={(slug) => {
-            setOrganization(slug);
-            window.location.search = `?org=${encodeURIComponent(slug)}`;
-          }}
-          onSignOut={() => {
-            signOut();
-            window.location.assign(import.meta.env.BASE_URL);
-          }}
-        />
+        <Header onSignOut={() => { signOut(); window.location.assign(import.meta.env.BASE_URL); }} />
         <main className="mx-auto w-full max-w-7xl space-y-5 p-6">
           <h1 className="text-2xl font-semibold">{title}</h1>
           {children}

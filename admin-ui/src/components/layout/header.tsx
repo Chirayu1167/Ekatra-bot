@@ -1,59 +1,89 @@
-import { LogOut } from "lucide-react";
+import { useState } from "react";
+import { Link } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
-import { useOrganisations } from "@/api/hooks";
-import type { AdminRole } from "@/api/admin";
+import BrandLogo from "@/components/BrandLogo";
+import { ROUTES } from "@/lib/constants";
+import { Menu, X } from "lucide-react";
 
-type HeaderProps = {
-  orgName: string | null;
-  orgSlug: string | null;
-  role: AdminRole;
-  selectedOrg: string;
-  onOrgSwitch: (slug: string) => void;
-  onSignOut: () => void;
-};
+export default function Header({ onSignOut }: { onSignOut: () => void }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-export function Header({
-  orgName,
-  orgSlug,
-  role,
-  selectedOrg,
-  onOrgSwitch,
-  onSignOut,
-}: HeaderProps) {
-  const isPlatformAdmin = role === "platform_admin";
-  const organisations = useOrganisations(isPlatformAdmin);
   return (
-    <header className="flex min-h-16 items-center justify-between border-b border-border bg-background px-4">
-      <span className="font-semibold tracking-tight">Ekatra Console</span>
-      <div className="flex items-center gap-3">
-        {isPlatformAdmin ? (
-          <label className="flex items-center gap-2 text-sm">
-            <span>Organisation</span>
-            <select
-              aria-label="Organisation"
-              className="h-9 rounded-md border border-input bg-background px-2"
-              value={selectedOrg || orgSlug || ""}
-              onChange={(event) => onOrgSwitch(event.target.value)}
-              disabled={organisations.isLoading || organisations.isError}
-            >
-              <option value="" disabled>
-                Select an organisation
-              </option>
-              {(organisations.data?.organisations ?? []).map((org) => (
-                <option key={org.id} value={org.slug}>
-                  {org.name || org.slug}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <span className="text-sm text-muted-foreground">{orgName ?? "Organisation"}</span>
-        )}
-        <span className="rounded-full bg-muted px-2.5 py-1 text-xs">{role.replace("_", " ")}</span>
-        <Button variant="outline" size="sm" onClick={onSignOut}>
-          Sign out <LogOut className="ml-1 size-4" />
-        </Button>
+    <header className="fixed top-0 w-full z-50 border-b border-border bg-background/80 backdrop-blur-md">
+      <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+        <Link
+          to={ROUTES.DASHBOARD}
+          className="flex items-center gap-2 transition-opacity duration-300 hover:opacity-80"
+        >
+          <BrandLogo className="text-xl" />
+        </Link>
+
+        <nav className="hidden md:flex items-center space-x-6">
+          <Link
+            to={ROUTES.DASHBOARD}
+            className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+          >
+            Overview
+          </Link>
+          <Link
+            to={ROUTES.COURSES}
+            className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+          >
+            Courses
+          </Link>
+          <Link
+            to={ROUTES.LEARNERS}
+            className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+          >
+            Learners
+          </Link>
+        </nav>
+
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={onSignOut}>
+            Sign out
+          </Button>
+        </div>
+
+        <button
+          className="md:hidden text-foreground hover:text-primary transition-colors"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
+
+      {mobileMenuOpen && (
+        <nav className="md:hidden pt-4 pb-2 border-b animate-fade-in bg-background">
+          <div className="flex flex-col space-y-4 px-4">
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="text-sm font-medium text-foreground hover:text-primary transition-colors py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Overview
+            </Link>
+            <Link
+              to={ROUTES.COURSES}
+              className="text-sm font-medium text-foreground hover:text-primary transition-colors py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Courses
+            </Link>
+            <Link
+              to={ROUTES.LEARNERS}
+              className="text-sm font-medium text-foreground hover:text-primary transition-colors py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Learners
+            </Link>
+            <Button variant="outline" onClick={() => { setMobileMenuOpen(false); onSignOut(); }} className="w-full mt-4">
+              Sign out
+            </Button>
+          </div>
+        </nav>
+      )}
     </header>
   );
 }

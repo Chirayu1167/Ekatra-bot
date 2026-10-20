@@ -5,7 +5,8 @@ import { adminApi } from "@/api/admin";
 import type { Course, CourseItem, CourseLesson } from "@/api/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ConsoleShell, ConfirmDialog, EmptyState, ErrorState, LoadingState, StatusBadge } from "./shared";
+import { ConsoleShell } from "@/components/console/console-shell";
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, StatusBadge } from "./shared";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "The request failed. Please try again.";

@@ -72,24 +72,32 @@ export function renderLesson(
   if (first && !first.mediaUrl) first.text = `${header}\n\n${first.text}`;
   else messages.unshift({ text: header });
 
-  const isFinal = ctx.lessonNumber >= ctx.lessonCount;
-  const footer = isFinal
-    ? `🎉 That was the last lesson — you've completed *${ctx.courseTitle}*!\n\nSend COURSES to find another course.`
-    : `Reply *NEXT* for lesson ${ctx.lessonNumber + 1} of ${ctx.lessonCount}.`;
+  const lastItem = items[items.length - 1];
+  const endsWithQuiz = lastItem?.kind === 'quiz';
 
-  const buttonSid = isFinal ? buttons.courses : buttons.next;
-  if (buttonSid) {
-    messages.push({
-      text: isFinal
-        ? `🎉 That was the last lesson — you've completed *${ctx.courseTitle}*! Tap Courses to find another.`
-        : `Ready for lesson ${ctx.lessonNumber + 1} of ${ctx.lessonCount}? Tap Next or reply NEXT.`,
-      contentSid: buttonSid,
-      fallbackText: footer,
-    });
-  } else {
-    const last = messages[messages.length - 1];
-    if (last && !last.mediaUrl) last.text = `${last.text}\n\n${footer}`;
-    else messages.push({ text: footer });
+  // When a lesson ends with a quiz, do not append the NEXT/footer prompt here.
+  // The quiz answer handler (courseBot.handleQuizAnswer) supplies the NEXT hint
+  // only after the learner answers, so quiz and NEXT never arrive together.
+  if (!endsWithQuiz) {
+    const isFinal = ctx.lessonNumber >= ctx.lessonCount;
+    const footer = isFinal
+      ? `🎉 That was the last lesson — you've completed *${ctx.courseTitle}*!\n\nSend COURSES to find another course.`
+      : `Reply *NEXT* for lesson ${ctx.lessonNumber + 1} of ${ctx.lessonCount}.`;
+
+    const buttonSid = isFinal ? buttons.courses : buttons.next;
+    if (buttonSid) {
+      messages.push({
+        text: isFinal
+          ? `🎉 That was the last lesson — you've completed *${ctx.courseTitle}*! Tap Courses to find another.`
+          : `Ready for lesson ${ctx.lessonNumber + 1} of ${ctx.lessonCount}? Tap Next or reply NEXT.`,
+        contentSid: buttonSid,
+        fallbackText: footer,
+      });
+    } else {
+      const last = messages[messages.length - 1];
+      if (last && !last.mediaUrl) last.text = `${last.text}\n\n${footer}`;
+      else messages.push({ text: footer });
+    }
   }
 
   return messages;

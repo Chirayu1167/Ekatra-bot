@@ -31,6 +31,7 @@ import { createTwilioClient, TwilioWhatsAppService } from './services/whatsapp.s
 import { LocalFakeWhatsAppSender } from './services/localFakeSender';
 import { drainJobs, reclaimStuck, type ProcessorDeps } from './worker/processor';
 import { setQueueDepth, setWorkerHeartbeatAgeSeconds } from './services/metrics.service';
+import { DisabledVoiceService, OpenAIVoiceService } from './services/voice.service';
 
 dotenv.config({ quiet: true });
 
@@ -80,7 +81,7 @@ function buildProcessor(): ProcessorDeps {
   const courses = new CourseService(db);
   const enrollments = new EnrollmentService(db);
   const learners = new LearnerService(db);
-  const optOuts = new OptOutService(db, env.OPTOUT_HASH_SECRET);
+  const optOuts = new OptOutService(db, env.OPTOUT_HASH_SECRET, env.OPTOUT_HASH_SECRET_PREVIOUS);
   const certificates = new CertificateService(
     db,
     learners,
@@ -172,6 +173,30 @@ function buildProcessor(): ProcessorDeps {
     logger,
     workerId,
     visibilitySecs: env.WORKER_VISIBILITY_SECS,
+    // Voice services: STT transcribes inbound voice notes; TTS synthesizes outbound replies.
+    voiceServices: (() => {
+      const sttEnabled = env.VOICE_STT_ENABLED && env.VOICE_STT_PROVIDER === 'openai';
+      const ttsEnabled = env.VOICE_TTS_ENABLED && env.VOICE_TTS_PROVIDER === 'openai';
+      if (!sttEnabled && !ttsEnabled) return new DisabledVoiceService();
+      if (!env.VOICE_STT_API_KEY && !env.VOICE_TTS_API_KEY) return new DisabledVoiceService();
+      const voice = new OpenAIVoiceService({
+        baseUrl: env.VOICE_STT_BASE_URL ?? env.VOICE_TTS_BASE_URL ?? 'https://api.openai.com/v1',
+        apiKey: env.VOICE_STT_API_KEY ?? env.VOICE_TTS_API_KEY ?? '',
+        sttModel: env.VOICE_STT_MODEL,
+        ttsModel: env.VOICE_TTS_MODEL,
+        ttsVoice: env.VOICE_TTS_VOICE,
+        mediaDir: env.MEDIA_DIR,
+        publicBaseUrl: env.PUBLIC_BASE_URL,
+        logger,
+      });
+      return {
+        stt: sttEnabled ? voice : { transcribe: async () => null },
+        tts: ttsEnabled ? voice : { synthesize: async () => null },
+      };
+    })(),
+    twilioAuth: env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
+      ? { accountSid: env.TWILIO_ACCOUNT_SID, authToken: env.TWILIO_AUTH_TOKEN }
+      : undefined,
   };
 }
 

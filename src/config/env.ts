@@ -77,6 +77,26 @@ const envSchema = z.object({
   LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   // Course questions each learner may ask per hour (bounds cost and abuse).
   LLM_QUESTIONS_PER_HOUR: z.coerce.number().int().min(1).max(500).default(20),
+  // --- Voice assistance (optional) --------------------------------------------------------
+  // Voice input: transcribe incoming WhatsApp voice notes via an OpenAI-compatible STT API.
+  VOICE_STT_ENABLED: z
+    .enum(['true', 'false'], { error: 'VOICE_STT_ENABLED must be "true" or "false"' })
+    .default('false')
+    .transform((v) => v === 'true'),
+  VOICE_STT_PROVIDER: z.enum(['openai', 'none']).default('none'),
+  VOICE_STT_API_KEY: z.string().min(1).optional(),
+  VOICE_STT_BASE_URL: z.string().url().optional(),
+  VOICE_STT_MODEL: z.string().min(1).default('whisper-1'),
+  // Voice output: synthesize replies into audio and send as media messages.
+  VOICE_TTS_ENABLED: z
+    .enum(['true', 'false'], { error: 'VOICE_TTS_ENABLED must be "true" or "false"' })
+    .default('false')
+    .transform((v) => v === 'true'),
+  VOICE_TTS_PROVIDER: z.enum(['openai', 'none']).default('none'),
+  VOICE_TTS_API_KEY: z.string().min(1).optional(),
+  VOICE_TTS_BASE_URL: z.string().url().optional(),
+  VOICE_TTS_MODEL: z.string().min(1).default('tts-1'),
+  VOICE_TTS_VOICE: z.string().min(1).default('alloy'),
   // Comma-separated origins allowed for cross-origin browser calls. Default: none (no CORS).
   CORS_ORIGINS: z.string().optional(),
   // Failed admin/webhook auth attempts allowed per IP per hour before 429s. Bounds probing.
@@ -96,6 +116,10 @@ const envSchema = z.object({
   // Required in production; refusing to start without it prevents silently re-enabling
   // messaging to opted-out numbers after a secret rotation or loss.
   OPTOUT_HASH_SECRET: z.string().min(32, 'OPTOUT_HASH_SECRET must be at least 32 characters').optional(),
+  // Previous opt-out hash secret, used during secret rotation. When set, both this and
+  // OPTOUT_HASH_SECRET are accepted when checking opt-out status; new opt-outs are written
+  // only with OPTOUT_HASH_SECRET. Allows zero-downtime secret rotation.
+  OPTOUT_HASH_SECRET_PREVIOUS: z.string().min(32, 'OPTOUT_HASH_SECRET_PREVIOUS must be at least 32 characters').optional(),
   // Readiness (A5): heartbeat age threshold (ms) for the worker-status route. Default 60s.
   READINESS_HEARTBEAT_MAX_AGE_MS: z.coerce.number().int().min(1000).max(3600000).default(60000),
   // --- Phase 3 durable delivery (worker, retry, scheduling) -------------------------------

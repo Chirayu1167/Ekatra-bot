@@ -19,6 +19,7 @@ async function main(): Promise<void> {
   }
   const nodeEnv = process.env['NODE_ENV'] || 'development';
   const optOutSecret = process.env['OPTOUT_HASH_SECRET'] || undefined;
+  const optOutSecretPrevious = process.env['OPTOUT_HASH_SECRET_PREVIOUS'] || undefined;
   if (nodeEnv === 'production' && (!optOutSecret || optOutSecret.length < 32)) {
     throw new Error('OPTOUT_HASH_SECRET is required in production and must be at least 32 characters');
   }
@@ -32,7 +33,7 @@ async function main(): Promise<void> {
   });
   try {
     await migratePostgres(pool, undefined, logger);
-    const optOuts = new OptOutService(pool, optOutSecret);
+    const optOuts = new OptOutService(pool, optOutSecret, optOutSecretPrevious);
     await optOuts.backfillHashes();
     await optOuts.migrateToHmac();
     logger.info('db.migration_job.completed');

@@ -66,7 +66,7 @@ const jobs = new JobService(db);
 const outbound = new OutboundService(db);
 const schedules = new SchedulerService(db);
 const learners = new LearnerService(db);
-const optOuts = new OptOutService(db, env.OPTOUT_HASH_SECRET);
+const optOuts = new OptOutService(db, env.OPTOUT_HASH_SECRET, env.OPTOUT_HASH_SECRET_PREVIOUS);
 // Dead-letter scope needs the same stores the worker uses (no sending here).
 const deadLetters = new DeadLetterService(db, outbound, jobs, optOuts, enrollments, courses);
 

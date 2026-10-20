@@ -14,6 +14,12 @@ export const incomingWebhookSchema = z.object({
   Body: z.string().default(''),
   // Set by Twilio when the user taps a quick-reply button: the `id` of the tapped button.
   ButtonPayload: z.string().optional(),
+  // Number of media attachments (0 for text, >=1 for media/voice).
+  NumMedia: z.coerce.number().min(0).default(0),
+  // URL of the first media attachment (Twilio-provided, requires auth to download).
+  MediaUrl0: z.string().url().optional(),
+  // MIME type of the first media attachment (e.g. 'audio/ogg' for WhatsApp voice notes).
+  MediaContentType0: z.string().optional(),
 });
 
 /** Transport-neutral shape used inside the app. */
@@ -22,6 +28,12 @@ export interface IncomingWhatsAppMessage {
   from: string;
   to: string;
   body: string;
+  /** Number of media attachments on this message. */
+  numMedia: number;
+  /** URL of the first media attachment (voice note audio, etc.). Requires Twilio auth to download. */
+  mediaUrl?: string;
+  /** MIME type of the media attachment (e.g. 'audio/ogg'). */
+  mediaContentType?: string;
 }
 
 export interface OutgoingWhatsAppMessage {
@@ -42,4 +54,20 @@ export interface OutgoingWhatsAppMessage {
 
 export interface SendResult {
   sid: string;
+}
+
+/** A voice note received from a learner: the raw media URL and its MIME type. */
+export interface VoiceNote {
+  /** Twilio media URL (protected; download with Account SID / Auth Token basic auth). */
+  mediaUrl: string;
+  /** MIME type, e.g. 'audio/ogg', 'audio/mp3'. */
+  contentType: string;
+}
+
+/** Whether the incoming message is a voice note. Returns the message with a `voiceNote` property when true. */
+export function isVoiceNote(msg: IncomingWhatsAppMessage): msg is IncomingWhatsAppMessage & { voiceNote: VoiceNote } {
+  if (msg.numMedia > 0 && msg.mediaUrl && msg.mediaContentType?.startsWith('audio/')) {
+    return true;
+  }
+  return false;
 }

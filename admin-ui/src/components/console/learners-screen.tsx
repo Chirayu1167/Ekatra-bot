@@ -4,7 +4,8 @@ import { adminApi, type EnrollmentStatus, type Learner } from "@/api/admin";
 import { useAuth } from "@/api/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ConsoleShell, DataTable, EmptyState, ErrorState, LoadingState, StatusBadge } from "./shared";
+import { ConsoleShell } from "@/components/console/console-shell";
+import { DataTable, EmptyState, ErrorState, LoadingState, StatusBadge } from "./shared";
 
 const PAGE_SIZE = 20;
 const statuses: EnrollmentStatus[] = ["pending", "active", "paused", "completed"];
