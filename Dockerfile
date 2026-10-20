@@ -10,6 +10,7 @@ COPY admin-ui/package.json admin-ui/package-lock.json ./admin-ui/
 RUN npm ci --prefix admin-ui
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY scripts ./scripts
 COPY admin-ui ./admin-ui
 RUN npm run build
 
