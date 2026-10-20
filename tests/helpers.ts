@@ -110,9 +110,9 @@ export async function buildHarness(options: HarnessOptions) {
     statusCallback: {
       reconcile: { db, outbound, enrollments, certificates },
       logger: silentLogger,
-      ...(options.consoleDir && { consoleDir: options.consoleDir }),
     },
     logger: silentLogger,
+    ...(options.consoleDir && { consoleDir: options.consoleDir }),
     ...(options.admin !== false && {
       admin: {
         db,

@@ -12,7 +12,10 @@ const pgx = pgFileContext('staging-smoke');
 describe('staging smoke script', () => {
   it('checks the local app and proves invalid-signature webhook creates no work', async () => {
     const consoleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ekatra-smoke-console-'));
-    fs.writeFileSync(path.join(consoleDir, 'index.html'), '<!doctype html><title>test console</title>');
+    fs.writeFileSync(
+      path.join(consoleDir, 'index.html'),
+      '<!doctype html><html lang="en"><head><title>test console</title></head><body></body></html>',
+    );
     const h = await buildHarness({
       pg: pgx.pool,
       autoDrain: false,

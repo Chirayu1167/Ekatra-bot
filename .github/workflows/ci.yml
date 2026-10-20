@@ -59,7 +59,13 @@ jobs:
       - name: Phase 3 worker entry compiled
         run: test -f dist/worker.js && node -e "console.log('worker entry ok')"
       - name: Build Docker image (no push)
-        run: docker build -t ekatra-bot:ci .
+        run: |
+          if ! docker build --progress=plain -t ekatra-bot:ci . > /tmp/docker-build.log 2>&1; then
+            tail -n 25 /tmp/docker-build.log | while IFS= read -r line; do
+              echo "::error::${line:0:4000}"
+            done
+            exit 1
+          fi
       - name: Root dependency audit (report only)
         run: npm audit || true
         continue-on-error: true
