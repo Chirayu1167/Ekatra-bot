@@ -28,10 +28,10 @@ describe('Chatbot', () => {
 
   it('returns the exact specified copy', () => {
     expect(REPLIES.greeting).toBe(
-      "Hello! 👋 Welcome to Ekatra.\n\nI'm your learning assistant."
+      "Hi! 👋 Welcome to Ekatra.\n\nI'm your learning assistant. Send COURSES to explore what's available.",
     );
     expect(REPLIES.fallback).toBe(
-      "I didn't quite understand that.\n\nSend COURSES to see available courses, or START <number> to begin."
+      "I'm not sure I understood that.\n\nSend COURSES to browse available courses, or START <number> to begin.",
     );
   });
 });
@@ -42,16 +42,28 @@ describe('Chatbot with main-menu buttons', () => {
 
   it('greeting carries the button template with the same text as fallback', async () => {
     const r = await withButtons.handleMessage({ userId: 'u1', text: 'Hi' });
-    expect(r).toMatchObject({ text: REPLIES.greeting, contentSid: SID, fallbackText: REPLIES.greeting });
+    expect(r).toMatchObject({
+      text: REPLIES.greeting,
+      contentSid: SID,
+      fallbackText: REPLIES.greeting,
+    });
   });
 
   it('fallback carries the button template with the same text as fallback', async () => {
     const r = await withButtons.handleMessage({ userId: 'u1', text: 'gibberish' });
-    expect(r).toMatchObject({ text: REPLIES.fallback, contentSid: SID, fallbackText: REPLIES.fallback });
+    expect(r).toMatchObject({
+      text: REPLIES.fallback,
+      contentSid: SID,
+      fallbackText: REPLIES.fallback,
+    });
   });
 
   it('"1" and "2" stay plain text (handled by the button tap itself)', async () => {
-    expect((await withButtons.handleMessage({ userId: 'u1', text: '1' })).contentSid).toBeUndefined();
-    expect((await withButtons.handleMessage({ userId: 'u1', text: '2' })).contentSid).toBeUndefined();
+    expect(
+      (await withButtons.handleMessage({ userId: 'u1', text: '1' })).contentSid,
+    ).toBeUndefined();
+    expect(
+      (await withButtons.handleMessage({ userId: 'u1', text: '2' })).contentSid,
+    ).toBeUndefined();
   });
 });

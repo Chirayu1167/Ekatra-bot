@@ -5,11 +5,7 @@ import type { Pool } from 'pg';
 import type { Env } from './config/env';
 import { createLogger, type Logger } from './logger';
 import { createErrorHandler, notFoundHandler } from './middleware/errorHandler';
-import {
-  authFailureLimiter,
-  corsIfConfigured,
-  securityHeaders,
-} from './middleware/security';
+import { authFailureLimiter, corsIfConfigured, securityHeaders } from './middleware/security';
 import { createAdminRouter, type AdminRouterOptions } from './routes/admin';
 import { createWhatsAppRouter } from './routes/whatsapp';
 import { createStatusCallbackRouter } from './routes/statusCallback';
@@ -55,6 +51,7 @@ export const ROUTE_INVENTORY: { method: string; path: string; protection: string
   { method: 'POST', path: '/admin/courses/:id/lessons', protection: 'admin:role' },
   { method: 'PUT', path: '/admin/courses/:id/lessons/:lessonId', protection: 'admin:role' },
   { method: 'DELETE', path: '/admin/courses/:id/lessons/:lessonId', protection: 'admin:role' },
+  { method: 'POST', path: '/admin/course-audio', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/courses/:id/schedule', protection: 'admin:role' },
   { method: 'PUT', path: '/admin/courses/:id/schedule', protection: 'admin:role' },
   { method: 'DELETE', path: '/admin/courses/:id/schedule', protection: 'admin:role' },
@@ -94,7 +91,12 @@ export const ROUTE_INVENTORY: { method: string; path: string; protection: string
 
 export interface AppDeps {
   env: Pick<Env, 'TWILIO_AUTH_TOKEN' | 'TWILIO_WEBHOOK_VALIDATE' | 'PUBLIC_BASE_URL'> &
-    Partial<Pick<Env, 'CORS_ORIGINS' | 'RATE_LIMIT_AUTH_FAILURES_PER_HOUR' | 'READINESS_HEARTBEAT_MAX_AGE_MS'>>;
+    Partial<
+      Pick<
+        Env,
+        'CORS_ORIGINS' | 'RATE_LIMIT_AUTH_FAILURES_PER_HOUR' | 'READINESS_HEARTBEAT_MAX_AGE_MS'
+      >
+    >;
   /** Database pool (required for /ready and /worker-status). */
   db: Pool;
   /** Durable inbound store + work queue (the webhook only accepts and enqueues). */
@@ -162,7 +164,8 @@ export function createApp(deps: AppDeps): Express {
         deps.db,
         'SELECT version FROM schema_migrations ORDER BY version',
       );
-      migrationOk = versions.rows.some((r) => r.version === 1) && versions.rows.some((r) => r.version === 2);
+      migrationOk =
+        versions.rows.some((r) => r.version === 1) && versions.rows.some((r) => r.version === 2);
       if (!migrationOk) reasons.push('migration incomplete');
     } catch {
       reasons.push('migration state unreadable');
@@ -258,7 +261,7 @@ export function createApp(deps: AppDeps): Express {
 
   if (deps.admin) app.use('/admin', failureLimiter, createAdminRouter(deps.admin));
 
-  if (deps.mediaDir && fs.existsSync(deps.mediaDir)) {
+  if (deps.mediaDir) {
     // Public, read-only. Twilio fetches attachments from here, so everything in this folder
     // is world-readable. Twilio also checks the Content-Type header against the file.
     app.use(

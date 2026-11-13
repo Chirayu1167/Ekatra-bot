@@ -34,7 +34,7 @@ describe('learner journey: list → start → every lesson → complete', () => 
     expect(start.texts[1]).toContain('📘 *Lesson 1 of 3: One*');
     expect(start.texts[1]).toContain('Text of lesson one.');
     expect(start.texts[1]).toContain('Reply *NEXT* for lesson 2 of 3.');
-    expect((await h.enrollments.findActive(h.orgId, USER))).toMatchObject({
+    expect(await h.enrollments.findActive(h.orgId, USER)).toMatchObject({
       lastDeliveredPosition: 1,
       status: 'active',
     });
@@ -70,7 +70,7 @@ describe('learner journey: list → start → every lesson → complete', () => 
     expect(three.messages).toHaveLength(2);
     expect(three.texts[1]).toMatch(/^🔗 Further reading: https:\/\/example\.test\/read\n\n🎉/);
     expect(three.all).toContain("you've completed *Alpha*");
-    const done = ((await h.enrollments.find(h.orgId, USER, 1)));
+    const done = await h.enrollments.find(h.orgId, USER, 1);
     expect(done).toMatchObject({ status: 'completed', lastDeliveredPosition: 3 });
     expect(done?.completedAt).toBeTruthy();
     const completedAt = done?.completedAt;
@@ -90,7 +90,7 @@ describe('learner journey: list → start → every lesson → complete', () => 
     await publishedCourse(h, singleLessonCourse());
     const start = await h.say('START tiny');
     expect(start.all).toContain("you've completed *Tiny*");
-    expect((await h.enrollments.find(h.orgId, USER, 1))).toMatchObject({
+    expect(await h.enrollments.find(h.orgId, USER, 1)).toMatchObject({
       status: 'completed',
       lastDeliveredPosition: 1,
     });
@@ -123,20 +123,20 @@ describe('finding and starting courses', () => {
 
   it('lists only published courses, with a friendly empty state', async () => {
     const h = await buildHarness({ pg: pgx.pool });
-    expect((await h.say('COURSES')).all).toContain('No courses are available yet');
-    ((await h.courses.createCourse(h.orgId, alphaCourse()))); // draft
-    expect((await h.say('COURSES')).all).toContain('No courses are available yet');
-    ((await h.courses.publish(h.orgId, 1)));
+    expect((await h.say('COURSES')).all).toContain('No courses are available right now');
+    await h.courses.createCourse(h.orgId, alphaCourse()); // draft
+    expect((await h.say('COURSES')).all).toContain('No courses are available right now');
+    await h.courses.publish(h.orgId, 1);
     expect((await h.say('courses')).all).toContain('Alpha');
     expect((await h.say('1')).all).toContain('Available courses'); // menu option "1 - Start learning"
   });
 
   it('hides drafts from learners', async () => {
     const h = await buildHarness({ pg: pgx.pool });
-    ((await h.courses.createCourse(h.orgId, alphaCourse())));
+    await h.courses.createCourse(h.orgId, alphaCourse());
     const r = await h.say('START 1');
     expect(r.all).toContain("couldn't find a course");
-    expect((await h.enrollments.findActive(h.orgId, USER))).toBeUndefined();
+    expect(await h.enrollments.findActive(h.orgId, USER)).toBeUndefined();
   });
 
   it('only one active course at a time; pausing frees the learner to start another', async () => {
@@ -148,7 +148,7 @@ describe('finding and starting courses', () => {
 
     const blocked = await h.say('START beta');
     expect(blocked.all).toContain("You're currently taking *Alpha*");
-    expect((await h.enrollments.find(h.orgId, USER, 2))).toBeUndefined();
+    expect(await h.enrollments.find(h.orgId, USER, 2)).toBeUndefined();
 
     await h.say('PAUSE');
     expect((await h.say('START beta')).all).toContain('completed *Beta*');
@@ -163,7 +163,7 @@ describe('finding and starting courses', () => {
     const h = await buildHarness({ pg: pgx.pool });
     await publishedCourse(h);
     await h.say('START 1');
-    ((await h.courses.unpublish(h.orgId, 1)));
+    await h.courses.unpublish(h.orgId, 1);
     expect((await h.say('NEXT')).all).toContain('Lesson 2 of 3');
     expect((await h.say('START 1', { from: OTHER_USER })).all).toContain("couldn't find a course");
   });
@@ -196,7 +196,7 @@ describe('invalid input is handled gracefully', () => {
       expect(r.res.status).toBe(200);
       expect(r.all).toContain("couldn't find a course");
       expect(r.all).toContain('COURSES');
-      expect((await h.enrollments.listForUser(h.orgId, USER))).toHaveLength(0);
+      expect(await h.enrollments.listForUser(h.orgId, USER)).toHaveLength(0);
     },
   );
 

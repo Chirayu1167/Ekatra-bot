@@ -1,17 +1,19 @@
 import * as React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentType } from "react";
 import { CoursesScreen } from "./courses-screen";
 import { LearnersScreen } from "./learners-screen";
 import { SchedulesScreen } from "./schedules-screen";
+import { CourseBuilder } from "./course-builder";
 
 const mockRole = vi.hoisted(() => ({ value: "org_admin" }));
 const api = vi.hoisted(() => ({
   courseList: vi.fn(),
   courseGet: vi.fn(),
   courseCreate: vi.fn(),
+  uploadAudio: vi.fn(),
   courseUpdate: vi.fn(),
   courseDelete: vi.fn(),
   coursePublish: vi.fn(),
@@ -51,7 +53,7 @@ vi.mock("@/api/admin", () => ({
   adminApi: {
     organisations: api.organisations,
     courses: {
-      list: api.courseList, get: api.courseGet, create: api.courseCreate, update: api.courseUpdate,
+      list: api.courseList, get: api.courseGet, create: api.courseCreate, uploadAudio: api.uploadAudio, update: api.courseUpdate,
       delete: api.courseDelete, publish: api.coursePublish, unpublish: api.courseUnpublish,
       addLesson: api.lessonAdd, updateLesson: api.lessonUpdate, deleteLesson: api.lessonDelete,
       getSchedule: api.courseGetSchedule, setSchedule: api.courseSetSchedule, deleteSchedule: api.courseDeleteSchedule,
@@ -91,6 +93,7 @@ beforeEach(() => {
   api.courseList.mockResolvedValue({ courses: [course] });
   api.courseGet.mockResolvedValue({ course: { ...course, lessons: [] } });
   api.courseCreate.mockResolvedValue({ course });
+  api.uploadAudio.mockResolvedValue({ url: "https://example.test/media/course-audio-test.mp3" });
   api.courseUpdate.mockResolvedValue({ course });
   api.courseDelete.mockResolvedValue(undefined);
   api.coursePublish.mockResolvedValue({ course });
@@ -204,6 +207,7 @@ it("shows instructors read-only course content without mutation controls", async
       lessons: [{ id: 3, courseId: 7, position: 1, title: "Lesson one", items: [{ kind: "text", text: "Read-only content" }] }],
     },
   });
+
   renderScreen(CoursesScreen);
   fireEvent.click(await screen.findByRole("button", { name: /Health Basics/ }));
   expect(await screen.findByText("Read-only content")).toBeTruthy();
@@ -214,6 +218,47 @@ it("shows instructors read-only course content without mutation controls", async
   expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Add lesson" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Save lesson" })).toBeNull();
+});
+
+it("uploads an MP3 and includes its URL in the new course", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const onComplete = vi.fn();
+  render(
+    <QueryClientProvider client={client}>
+      <CourseBuilder onComplete={onComplete} onClose={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(screen.getByPlaceholderText("e.g. Introduction to Digital Marketing"), {
+    target: { value: "Voice course" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Audio" }));
+  fireEvent.change(screen.getByLabelText("Upload an MP3 (up to 16 MB)"), {
+    target: { files: [new File(["mp3"], "lesson.mp3", { type: "audio/mpeg" })] },
+  });
+
+  await waitFor(() => expect(api.uploadAudio).toHaveBeenCalled());
+  await screen.findByDisplayValue("https://example.test/media/course-audio-test.mp3");
+  fireEvent.click(screen.getByRole("button", { name: "Create Course" }));
+
+  await waitFor(() =>
+    expect(api.courseCreate).toHaveBeenCalledWith({
+      title: "Voice course",
+      description: "",
+      lessons: [
+        {
+          title: "Module 1",
+          items: [
+            {
+              kind: "audio",
+              caption: "",
+              url: "https://example.test/media/course-audio-test.mp3",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  await waitFor(() => expect(onComplete).toHaveBeenCalled());
 });
 
 it("does not persist the admin key in localStorage", async () => {

@@ -3,11 +3,7 @@ import type { PgDb } from '../db/pg';
 import { createAdminController } from '../controllers/admin.controller';
 import { createFailuresController } from '../controllers/failures.controller';
 import { createLearnerController } from '../controllers/learner.controller';
-import {
-  authenticateAdmin,
-  requireRole,
-  resolveOrgFromPrincipal,
-} from '../middleware/adminAuth';
+import { authenticateAdmin, requireRole, resolveOrgFromPrincipal } from '../middleware/adminAuth';
 import type { AdminAuthService } from '../services/adminAuth.service';
 import type { CourseService } from '../services/course.service';
 import type { EnrollmentService } from '../services/enrollment.service';
@@ -19,6 +15,7 @@ import type { OutboundService } from '../services/outbound.service';
 import type { LearnerService } from '../services/learner.service';
 import type { OptOutService } from '../services/optout.service';
 import type { CertificateService } from '../services/certificate.service';
+import { createCourseAudioUploadController } from '../controllers/courseMedia.controller';
 
 export interface AdminRouterOptions {
   db: PgDb;
@@ -37,6 +34,10 @@ export interface AdminRouterOptions {
   /** Durable inbound store + outbound pipeline for learner export/delete. */
   inbound?: InboundEventService;
   outbound?: OutboundService;
+  /** Publicly served media folder used for course audio uploads. */
+  mediaDir?: string;
+  /** Public HTTPS origin used to construct Twilio-fetchable media URLs. */
+  publicBaseUrl?: string;
   /** Bootstrap platform_admin credential (ADMIN_API_KEY). Omit when keyless. */
   bootstrapKey?: string;
 }
@@ -60,10 +61,23 @@ export function createAdminRouter({
   deadLetters,
   inbound,
   outbound,
+  mediaDir,
+  publicBaseUrl,
   bootstrapKey,
 }: AdminRouterOptions): Router {
   const router = Router();
-  const c = createAdminController({ db, courses, orgs, auth, schedules, enrollments, learners, optOuts, outbound, certificates });
+  const c = createAdminController({
+    db,
+    courses,
+    orgs,
+    auth,
+    schedules,
+    enrollments,
+    learners,
+    optOuts,
+    outbound,
+    certificates,
+  });
   const manageUsers = requireRole('platform_admin', 'org_admin');
 
   router.use(
@@ -84,6 +98,12 @@ export function createAdminRouter({
   router.post('/courses/:id/lessons', manageUsers, c.addLesson);
   router.put('/courses/:id/lessons/:lessonId', manageUsers, c.updateLesson);
   router.delete('/courses/:id/lessons/:lessonId', manageUsers, c.deleteLesson);
+  router.post(
+    '/course-audio',
+    manageUsers,
+    express.raw({ type: 'application/octet-stream', limit: '16mb' }),
+    createCourseAudioUploadController({ mediaDir, publicBaseUrl }),
+  );
 
   // Course schedules are operational controls, not course authoring.
   // tenant-scoped. Mounted only when the schedule store is configured.
@@ -186,11 +206,7 @@ export function createAdminRouter({
       requireRole('platform_admin', 'org_admin'),
       lc.exportLearner,
     );
-    router.delete(
-      '/learners/:phone',
-      requireRole('platform_admin', 'org_admin'),
-      lc.deleteLearner,
-    );
+    router.delete('/learners/:phone', requireRole('platform_admin', 'org_admin'), lc.deleteLearner);
   }
 
   return router;

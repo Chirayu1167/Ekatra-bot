@@ -78,22 +78,53 @@ describe('admin RBAC', () => {
     const courseId = created.body.course.id as number;
     const lessonId = created.body.course.lessons[0].id as number;
     expect(
-      (await request(app).get('/admin/courses').set('Authorization', `Bearer ${instructorKey}`)).status,
+      (await request(app).get('/admin/courses').set('Authorization', `Bearer ${instructorKey}`))
+        .status,
     ).toBe(200);
     expect(
-      (await request(app).get(`/admin/courses/${courseId}`).set('Authorization', `Bearer ${instructorKey}`)).status,
+      (
+        await request(app)
+          .get(`/admin/courses/${courseId}`)
+          .set('Authorization', `Bearer ${instructorKey}`)
+      ).status,
     ).toBe(200);
     const mutations = await Promise.all([
-      request(app).post('/admin/courses').set('Authorization', `Bearer ${instructorKey}`).send({ title: 'Forbidden' }),
-      request(app).patch(`/admin/courses/${courseId}`).set('Authorization', `Bearer ${instructorKey}`).send({ title: 'Forbidden' }),
-      request(app).delete(`/admin/courses/${courseId}`).set('Authorization', `Bearer ${instructorKey}`),
-      request(app).post(`/admin/courses/${courseId}/publish`).set('Authorization', `Bearer ${instructorKey}`),
-      request(app).post(`/admin/courses/${courseId}/unpublish`).set('Authorization', `Bearer ${instructorKey}`),
-      request(app).post(`/admin/courses/${courseId}/lessons`).set('Authorization', `Bearer ${instructorKey}`).send({ title: 'Forbidden', items: [] }),
-      request(app).put(`/admin/courses/${courseId}/lessons/${lessonId}`).set('Authorization', `Bearer ${instructorKey}`).send({ title: 'Forbidden', items: [] }),
-      request(app).delete(`/admin/courses/${courseId}/lessons/${lessonId}`).set('Authorization', `Bearer ${instructorKey}`),
+      request(app)
+        .post('/admin/courses')
+        .set('Authorization', `Bearer ${instructorKey}`)
+        .send({ title: 'Forbidden' }),
+      request(app)
+        .patch(`/admin/courses/${courseId}`)
+        .set('Authorization', `Bearer ${instructorKey}`)
+        .send({ title: 'Forbidden' }),
+      request(app)
+        .delete(`/admin/courses/${courseId}`)
+        .set('Authorization', `Bearer ${instructorKey}`),
+      request(app)
+        .post(`/admin/courses/${courseId}/publish`)
+        .set('Authorization', `Bearer ${instructorKey}`),
+      request(app)
+        .post(`/admin/courses/${courseId}/unpublish`)
+        .set('Authorization', `Bearer ${instructorKey}`),
+      request(app)
+        .post(`/admin/courses/${courseId}/lessons`)
+        .set('Authorization', `Bearer ${instructorKey}`)
+        .send({ title: 'Forbidden', items: [] }),
+      request(app)
+        .put(`/admin/courses/${courseId}/lessons/${lessonId}`)
+        .set('Authorization', `Bearer ${instructorKey}`)
+        .send({ title: 'Forbidden', items: [] }),
+      request(app)
+        .delete(`/admin/courses/${courseId}/lessons/${lessonId}`)
+        .set('Authorization', `Bearer ${instructorKey}`),
     ]);
     expect(mutations.map((response) => response.status)).toEqual(Array(8).fill(403));
+    const audioUpload = await request(app)
+      .post('/admin/course-audio')
+      .set('Authorization', `Bearer ${instructorKey}`)
+      .type('application/octet-stream')
+      .send(Buffer.from('not audio'));
+    expect(audioUpload.status).toBe(403);
 
     const adminEdit = await request(app)
       .patch(`/admin/courses/${courseId}`)
@@ -140,7 +171,7 @@ describe('admin RBAC', () => {
       .set('Authorization', `Bearer ${BOOTSTRAP}`)
       .send({ slug: 'acme', name: 'Acme' });
     expect(orgRes.status).toBe(201);
-    expect((await orgs.getBySlug('acme'))).toBeDefined();
+    expect(await orgs.getBySlug('acme')).toBeDefined();
 
     const userRes = await request(app)
       .post('/admin/users')
@@ -152,7 +183,8 @@ describe('admin RBAC', () => {
     expect(key.length).toBeGreaterThan(30);
 
     // Only the hash is stored — the plaintext appears nowhere in the database.
-    const rows = (await query<{ key_hash: string }>(db, 'SELECT key_hash FROM admin_api_keys')).rows;
+    const rows = (await query<{ key_hash: string }>(db, 'SELECT key_hash FROM admin_api_keys'))
+      .rows;
     expect(rows).toHaveLength(1);
     expect(rows[0]?.key_hash).toBe(sha256(key));
     const dump = JSON.stringify(
@@ -161,9 +193,7 @@ describe('admin RBAC', () => {
     expect(dump).not.toContain(key);
 
     // The new key works for its org's courses.
-    const list = await request(app)
-      .get('/admin/courses')
-      .set('Authorization', `Bearer ${key}`);
+    const list = await request(app).get('/admin/courses').set('Authorization', `Bearer ${key}`);
     expect(list.status).toBe(200);
   });
 
@@ -199,7 +229,7 @@ describe('admin RBAC', () => {
   });
 
   it('instructor can read own-org learners and enrollments but cannot manage users', async () => {
-      const { app, orgs, enrollments, learners } = await setup();
+    const { app, orgs, enrollments, learners } = await setup();
     const made = await request(app)
       .post('/admin/users')
       .set('Authorization', `Bearer ${BOOTSTRAP}`)
@@ -216,7 +246,9 @@ describe('admin RBAC', () => {
     await learners.upsert(learnerPhone, 'Asha Rao');
     const enrollment = await enrollments.createPending(orgId, learnerPhone, course.body.course.id);
 
-    const learnerList = await request(app).get('/admin/learners').set('Authorization', `Bearer ${key}`);
+    const learnerList = await request(app)
+      .get('/admin/learners')
+      .set('Authorization', `Bearer ${key}`);
     expect(learnerList.status).toBe(200);
     expect(learnerList.body.learners[0].phone).toBe('whatsapp:+***3210');
     const learnerDetail = await request(app)
@@ -225,7 +257,9 @@ describe('admin RBAC', () => {
     expect(learnerDetail.status).toBe(200);
     expect(learnerDetail.body.phone).toBe('whatsapp:+***3210');
     expect(learnerDetail.body.fullPhone).toBeUndefined();
-    const enrollmentList = await request(app).get('/admin/enrollments').set('Authorization', `Bearer ${key}`);
+    const enrollmentList = await request(app)
+      .get('/admin/enrollments')
+      .set('Authorization', `Bearer ${key}`);
     expect(enrollmentList.status).toBe(200);
     expect(enrollmentList.body.enrollments[0].userId).toBe('whatsapp:+***3210');
 
@@ -288,31 +322,28 @@ describe('admin RBAC', () => {
     ).toBe(401);
 
     const user = await auth.createUser(await orgs.getDefaultId(), 'Temp', 'org_admin');
-    const live = ((await auth.issueKey(user.id)));
+    const live = await auth.issueKey(user.id);
     expect(
       (await request(app).get('/admin/courses').set('Authorization', `Bearer ${live.plaintext}`))
         .status,
     ).toBe(200);
-    ((await auth.revokeKey(live.id)));
+    await auth.revokeKey(live.id);
     expect(
       (await request(app).get('/admin/courses').set('Authorization', `Bearer ${live.plaintext}`))
         .status,
     ).toBe(401);
 
-    const expired = ((await auth.issueKey(user.id, new Date(Date.now() - 1000).toISOString())));
+    const expired = await auth.issueKey(user.id, new Date(Date.now() - 1000).toISOString());
     expect(
-      (
-        await request(app)
-          .get('/admin/courses')
-          .set('Authorization', `Bearer ${expired.plaintext}`)
-      ).status,
+      (await request(app).get('/admin/courses').set('Authorization', `Bearer ${expired.plaintext}`))
+        .status,
     ).toBe(401);
   });
 
   it('rotating a key invalidates the old one; last_used_at is recorded', async () => {
     const { app, auth, orgs, db } = await setup();
     const user = await auth.createUser(await orgs.getDefaultId(), 'R', 'org_admin');
-    const first = ((await auth.issueKey(user.id)));
+    const first = await auth.issueKey(user.id);
     expect(
       (await request(app).get('/admin/courses').set('Authorization', `Bearer ${first.plaintext}`))
         .status,
@@ -353,7 +384,10 @@ describe('admin RBAC', () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.apiKey).toBe('string');
     const audits = (
-      await query<{ action: string }>(db, "SELECT action FROM audit_log WHERE action = 'key.recover'")
+      await query<{ action: string }>(
+        db,
+        "SELECT action FROM audit_log WHERE action = 'key.recover'",
+      )
     ).rows;
     expect(audits.length).toBeGreaterThan(0);
   });
@@ -362,11 +396,8 @@ describe('admin RBAC', () => {
     const { app } = await setup();
     // A certificate-shaped code as a Bearer key is unknown -> 401.
     expect(
-      (
-        await request(app)
-          .get('/admin/courses')
-          .set('Authorization', 'Bearer 12-AbCdEfGhIjKlMnOp')
-      ).status,
+      (await request(app).get('/admin/courses').set('Authorization', 'Bearer 12-AbCdEfGhIjKlMnOp'))
+        .status,
     ).toBe(401);
     // An admin key as a certificate code fails the code format -> 404.
     expect((await request(app).get(`/certificates/${BOOTSTRAP}`)).status).toBe(404);

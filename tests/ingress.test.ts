@@ -63,6 +63,7 @@ const EXPECTED_ROUTES: { method: string; path: string; protection: string }[] = 
   { method: 'POST', path: '/admin/courses/:id/lessons', protection: 'admin:role' },
   { method: 'PUT', path: '/admin/courses/:id/lessons/:lessonId', protection: 'admin:role' },
   { method: 'DELETE', path: '/admin/courses/:id/lessons/:lessonId', protection: 'admin:role' },
+  { method: 'POST', path: '/admin/course-audio', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/courses/:id/schedule', protection: 'admin:role' },
   { method: 'PUT', path: '/admin/courses/:id/schedule', protection: 'admin:role' },
   { method: 'DELETE', path: '/admin/courses/:id/schedule', protection: 'admin:role' },
@@ -163,8 +164,9 @@ describe('route inventory', () => {
       },
     });
     await request(app).get('/health');
-    const router = (app as unknown as { router?: { stack: unknown[] }; _router?: { stack: unknown[] } }).router ??
-      (app as unknown as { _router?: { stack: unknown[] } })._router;
+    const router =
+      (app as unknown as { router?: { stack: unknown[] }; _router?: { stack: unknown[] } })
+        .router ?? (app as unknown as { _router?: { stack: unknown[] } })._router;
     // Count route layers recursively: sub-routers (register, admin, …) nest their routes.
     const countRoutes = (layers: unknown[]): number =>
       (layers ?? []).reduce<number>((n, l) => {
@@ -226,7 +228,10 @@ describe('/console static route isolation', () => {
     const consoleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ek-console-'));
     fs.mkdirSync(path.join(consoleDir, 'assets'));
     fs.writeFileSync(path.join(consoleDir, 'index.html'), '<!doctype html><title>Console</title>');
-    fs.writeFileSync(path.join(consoleDir, 'assets', 'app-AbCdEf123456.js'), 'window.consoleReady = true;');
+    fs.writeFileSync(
+      path.join(consoleDir, 'assets', 'app-AbCdEf123456.js'),
+      'window.consoleReady = true;',
+    );
     try {
       const { app } = await setupApp([], consoleDir);
       const index = await request(app).get('/console/');
@@ -249,7 +254,9 @@ describe('/console static route isolation', () => {
       expect((await request(app).get('/admin/courses')).status).toBe(401);
       expect((await request(app).get('/register')).status).toBe(404);
       expect((await request(app).get('/media/not-present')).status).toBe(404);
-      expect((await request(app).post('/webhooks/whatsapp').type('form').send({})).status).toBe(403);
+      expect((await request(app).post('/webhooks/whatsapp').type('form').send({})).status).toBe(
+        403,
+      );
     } finally {
       fs.rmSync(consoleDir, { recursive: true, force: true });
     }
@@ -289,14 +296,20 @@ describe('webhook rejection is total: no processing, no DB change, no send', () 
     expect(await enrollments.locateUser(USER)).toEqual(beforeEnroll);
     expect((await query(db, 'SELECT COUNT(*) AS n FROM inbound_events')).rows).toEqual([{ n: 0 }]);
     expect((await query(db, 'SELECT COUNT(*) AS n FROM jobs')).rows).toEqual([{ n: 0 }]);
-    expect((await query(db, 'SELECT COUNT(*) AS n FROM outbound_messages')).rows).toEqual([{ n: 0 }]);
+    expect((await query(db, 'SELECT COUNT(*) AS n FROM outbound_messages')).rows).toEqual([
+      { n: 0 },
+    ]);
   });
 
   it('oversized webhook bodies are rejected before processing', async () => {
     const { app, db } = await setupApp();
     const big = 'x'.repeat(64 * 1024);
     const params = { MessageSid: 'SMbig', From: USER, To: BOT, Body: big };
-    const sig = twilio.getExpectedTwilioSignature(AUTH_TOKEN, `${PUBLIC_BASE_URL}${WEBHOOK}`, params);
+    const sig = twilio.getExpectedTwilioSignature(
+      AUTH_TOKEN,
+      `${PUBLIC_BASE_URL}${WEBHOOK}`,
+      params,
+    );
     const res = await request(app)
       .post(WEBHOOK)
       .set('X-Twilio-Signature', sig)
@@ -318,7 +331,11 @@ describe('log redaction', () => {
     const logs: unknown[] = [];
     const { app } = await setupApp(logs);
     const params = { MessageSid: 'SMlog', From: USER, To: BOT, Body: 'my secret body' };
-    const sig = twilio.getExpectedTwilioSignature(AUTH_TOKEN, `${PUBLIC_BASE_URL}${WEBHOOK}`, params);
+    const sig = twilio.getExpectedTwilioSignature(
+      AUTH_TOKEN,
+      `${PUBLIC_BASE_URL}${WEBHOOK}`,
+      params,
+    );
     await request(app).post(WEBHOOK).set('X-Twilio-Signature', sig).type('form').send(params);
     const dump = JSON.stringify(logs);
     expect(dump).not.toContain('my secret body');
@@ -343,13 +360,13 @@ describe('/media is public but cannot leak or traverse', () => {
     const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ekatra-media-'));
     fs.writeFileSync(path.join(mediaDir, 'sample.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     const app = createApp({
-    env: {
-      TWILIO_AUTH_TOKEN: AUTH_TOKEN,
-      TWILIO_WEBHOOK_VALIDATE: false,
-      PUBLIC_BASE_URL,
-    },
-    db: pgx.pool,
-    inbound: new InboundEventService(pgx.pool),
+      env: {
+        TWILIO_AUTH_TOKEN: AUTH_TOKEN,
+        TWILIO_WEBHOOK_VALIDATE: false,
+        PUBLIC_BASE_URL,
+      },
+      db: pgx.pool,
+      inbound: new InboundEventService(pgx.pool),
       jobs: new JobService(pgx.pool),
       statusCallback: {
         reconcile: {

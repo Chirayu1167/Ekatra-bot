@@ -20,7 +20,7 @@ export const COMMAND_HELP = [
   'PAUSE / RESUME – pause or continue',
   'PROGRESS – see how far you are',
   'CERTIFICATE – get your certificate after finishing a course',
-  'Or just type a question about your course and I\'ll answer it.',
+  "Or just type a question about your course and I'll answer it.",
 ].join('\n');
 
 const MAX_COURSES_LISTED = 10;
@@ -72,7 +72,10 @@ export async function certificateMessagesFor(
   if (!deps.publicBaseUrl) return [{ text: `${greeting} Your completion has been recorded.` }];
   const code = deps.certificates.codeFor(enrollment.id);
   const base = `${deps.publicBaseUrl}/certificates/${code}`;
-  const asPdf = pdfSupported({ learnerName: name || 'Learner', courseTitle: enrollment.courseTitle });
+  const asPdf = pdfSupported({
+    learnerName: name || 'Learner',
+    courseTitle: enrollment.courseTitle,
+  });
   return asPdf
     ? [{ text: `${greeting} Here's your certificate.`, mediaUrl: `${base}.pdf` }]
     : [{ text: `${greeting} View and print your certificate here:\n${base}` }];
@@ -151,7 +154,12 @@ export interface CourseBotDeps {
 }
 
 const isGreeting = (text: string) =>
-  ['hello', 'hi', 'hey', 'hola', 'namaste'].includes(text.trim().toLowerCase().replace(/[\s!.?,]+$/u, ''));
+  ['hello', 'hi', 'hey', 'hola', 'namaste'].includes(
+    text
+      .trim()
+      .toLowerCase()
+      .replace(/[\s!.?,]+$/u, ''),
+  );
 
 /**
  * Course delivery on top of the original chatbot.
@@ -212,8 +220,23 @@ export class CourseBot implements MessageHandler {
    * Shows only relevant next actions. Avoids redundant buttons.
    */
   private selectButtonSidForContext(ctx: ButtonContext): string | undefined {
-    const { messageType, isFinalLesson, activeEnrollment, pausedEnrollment, pendingEnrollment, completedEnrollments, buttonState } = ctx;
-    const state = buttonState ?? this.resolveButtonStateFromEnrollments(activeEnrollment, pausedEnrollment, pendingEnrollment, completedEnrollments);
+    const {
+      messageType,
+      isFinalLesson,
+      activeEnrollment,
+      pausedEnrollment,
+      pendingEnrollment,
+      completedEnrollments,
+      buttonState,
+    } = ctx;
+    const state =
+      buttonState ??
+      this.resolveButtonStateFromEnrollments(
+        activeEnrollment,
+        pausedEnrollment,
+        pendingEnrollment,
+        completedEnrollments,
+      );
 
     switch (messageType) {
       case 'lesson': {
@@ -241,7 +264,8 @@ export class CourseBot implements MessageHandler {
 
       case 'welcome': {
         // Welcome/opt-in: show Start Course if pending, Resume if paused, else Browse Courses
-        if (pendingEnrollment) return this.buttons.startCourse ?? this.buttons.resume ?? this.buttons.courses;
+        if (pendingEnrollment)
+          return this.buttons.startCourse ?? this.buttons.resume ?? this.buttons.courses;
         if (pausedEnrollment) return this.buttons.resume ?? this.buttons.cmds2;
         return this.buttons.courses;
       }
@@ -286,7 +310,7 @@ export class CourseBot implements MessageHandler {
     active: EnrollmentSummary | null | undefined,
     paused: EnrollmentSummary | null | undefined,
     pending: EnrollmentSummary | null | undefined,
-    completed: EnrollmentSummary[] | undefined
+    completed: EnrollmentSummary[] | undefined,
   ): ButtonState {
     if (active) return 'active';
     if (paused) return 'paused';
@@ -307,7 +331,10 @@ export class CourseBot implements MessageHandler {
       return { text: '', noSend: true };
     }
     if (keyword?.kind === 'optin' && keyword.word !== 'start') {
-      return this.offerCourses("You're already subscribed. Send COURSES to see what's available.", 'Tap Courses to see what\'s available.');
+      return this.offerCourses(
+        "You're already subscribed. Send COURSES to see what's available.",
+        "Tap Courses to see what's available.",
+      );
     }
 
     const command = parseCommand(input.text);
@@ -374,7 +401,11 @@ export class CourseBot implements MessageHandler {
   private async optIn(userId: string): Promise<ChatbotReply> {
     await this.optOuts.optIn(userId);
     this.logger.info('learner.opted_in', {});
-    const paused = await this.enrollments.findLatest(await this.resolveOrgId(userId), userId, 'paused');
+    const paused = await this.enrollments.findLatest(
+      await this.resolveOrgId(userId),
+      userId,
+      'paused',
+    );
     if (!paused) {
       return this.withCommandButtons(
         say("Welcome back, you're subscribed again! 👋\n\nSend COURSES to see what's available."),
@@ -395,7 +426,12 @@ export class CourseBot implements MessageHandler {
     const courses = (
       await this.courses.listCourses(await this.resolveOrgId(userId), { status: 'published' })
     ).filter((c) => c.lessonCount > 0);
-    if (courses.length === 0) return this.withCommandButtons(say('No courses are available yet. Please check back soon.'), state, { messageType: 'command_response' });
+    if (courses.length === 0)
+      return this.withCommandButtons(
+        say('No courses are available right now. Please check back soon.'),
+        state,
+        { messageType: 'command_response' },
+      );
 
     const shown = courses.slice(0, MAX_COURSES_LISTED);
     const lines = shown.map(
@@ -410,26 +446,34 @@ export class CourseBot implements MessageHandler {
     const courseSelectButtons = this.getCourseSelectButtons(shown);
     if (courseSelectButtons) {
       const text = `📚 *Available courses*\n\n${lines.join('\n\n')}${more}\n\nTap a course to start:`;
-      return { text: courseSelectButtons.withButton, contentSid: courseSelectButtons.contentSid, fallbackText: text };
+      return {
+        text: courseSelectButtons.withButton,
+        contentSid: courseSelectButtons.contentSid,
+        fallbackText: text,
+      };
     }
 
     const list = say(
       `📚 *Available courses*\n\n${lines.join('\n\n')}${more}\n\n` +
-        `Reply *START <number>* to begin, e.g. START ${shown[0]?.id ?? 1}.`,
+        `To get started, reply *START <number>* (for example, START ${shown[0]?.id ?? 1}).`,
     );
     // Only a learner with an active course gets command buttons here: Next/Pause act on
     // that course. For everyone else the typed START <number> instruction IS the interface —
     // Next/Pause would be dead ends.
-    return state === 'active' ? this.withCommandButtons(list, state, { messageType: 'command_response' }) : list;
+    return state === 'active'
+      ? this.withCommandButtons(list, state, { messageType: 'command_response' })
+      : list;
   }
 
   /** Get course selection buttons for the given courses (max 3 per template). */
-  private getCourseSelectButtons(courses: { id: number; title: string }[]): { contentSid: string; withButton: string } | null {
+  private getCourseSelectButtons(
+    courses: { id: number; title: string }[],
+  ): { contentSid: string; withButton: string } | null {
     if (!this.buttons.courseSelect || this.buttons.courseSelect.length === 0) return null;
     // For now, use the first template (in a real app, you'd paginate)
     const contentSid = this.buttons.courseSelect[0];
     if (!contentSid) return null;
-    const titles = courses.slice(0, 3).map(c => `${c.id}. ${c.title}`);
+    const titles = courses.slice(0, 3).map((c) => `${c.id}. ${c.title}`);
     const withButton = `📚 *Available courses*\n\n${titles.join('\n\n')}\n\nTap a course to start:`;
     return { contentSid, withButton };
   }
@@ -474,8 +518,8 @@ export class CourseBot implements MessageHandler {
     const intro =
       `🎓 *${course.title}*` +
       (course.description ? `\n\n${course.description}` : '') +
-      `\n\n${plural(course.lessonCount, 'lesson')}. I'll send one at a time — reply NEXT whenever you're ready. ` +
-      `You can PAUSE any time and pick up later with RESUME.`;
+      `\n\n${plural(course.lessonCount, 'lesson')}. I'll send each one at a time. Reply NEXT when you're ready, ` +
+      `or PAUSE anytime and come back later with RESUME.`;
     const messages: ReplyMessage[] = [
       { text: intro },
       ...renderLesson(
@@ -490,7 +534,8 @@ export class CourseBot implements MessageHandler {
       ),
     ];
     const isFinal = course.lessonCount <= 1;
-    if (isFinal && this.certificates) messages.push({ text: 'Send *CERTIFICATE* to get your certificate of completion.' });
+    if (isFinal && this.certificates)
+      messages.push({ text: 'Send *CERTIFICATE* to get your certificate of completion.' });
 
     return fromMessages(
       messages,
@@ -526,7 +571,7 @@ export class CourseBot implements MessageHandler {
       }
       return this.offerCourses(
         "You haven't started a course yet. Send COURSES to see what's available.",
-        'Tap Courses to see what\'s available.',
+        "Tap Courses to see what's available.",
       );
     }
 
@@ -592,7 +637,13 @@ export class CourseBot implements MessageHandler {
     return fromMessages(
       messages,
       async () => {
-        const advanced = await this.enrollments.advance(orgId, active.id, position - 1, position, isFinal);
+        const advanced = await this.enrollments.advance(
+          orgId,
+          active.id,
+          position - 1,
+          position,
+          isFinal,
+        );
         if (!advanced) {
           this.logger.warn('course.progress.not_advanced', { enrollmentId: active.id, position });
           return;
@@ -629,7 +680,7 @@ export class CourseBot implements MessageHandler {
           )
         : this.offerCourses(
             "You don't have a course in progress. Send COURSES to see what's available.",
-            'Tap Courses to see what\'s available.',
+            "Tap Courses to see what's available.",
           );
     }
     await this.enrollments.pause(orgId, active.id);
@@ -686,7 +737,7 @@ export class CourseBot implements MessageHandler {
     if (!paused)
       return this.offerCourses(
         'There is nothing to resume. Send COURSES to start a course.',
-        'Tap Courses to see what\'s available.',
+        "Tap Courses to see what's available.",
       );
     return this.resumeEnrollment(userId, paused);
   }
@@ -708,8 +759,8 @@ export class CourseBot implements MessageHandler {
       text:
         `🎓 *${enrollment.courseTitle}*` +
         (course?.description ? `\n\n${course.description}` : '') +
-        `\n\n${plural(enrollment.lessonCount, 'lesson')}. Use *Next* for each lesson, *Pause* to take a break and *Resume* to carry on. ` +
-        `You can also type a question about the course any time.`,
+        `\n\n${plural(enrollment.lessonCount, 'lesson')}. Reply NEXT when you're ready for each lesson, or PAUSE anytime. ` +
+        `Reply RESUME whenever you'd like to continue. You can ask a question about the course at any time.`,
     };
     const first: ReplyMessage = {
       text: lesson.text,
@@ -740,7 +791,8 @@ export class CourseBot implements MessageHandler {
 
   private async askTutor(input: ChatbotInput): Promise<ChatbotReply | null> {
     const text = input.text.trim();
-    if (!this.tutor || text.length < 3 || ['help'].includes(text.toLowerCase()) || isGreeting(text)) return null;
+    if (!this.tutor || text.length < 3 || ['help'].includes(text.toLowerCase()) || isGreeting(text))
+      return null;
     const orgId = await this.resolveOrgId(input.userId);
     const enrollment =
       (await this.enrollments.findActive(orgId, input.userId)) ??
@@ -754,7 +806,10 @@ export class CourseBot implements MessageHandler {
       ? 'Send NEXT to continue, or PAUSE to take a break.'
       : 'Send RESUME to continue where you left off.';
     return sid
-      ? { text: result.text, followUps: [{ text: 'Ready to continue?', contentSid: sid, fallbackText: hint }] }
+      ? {
+          text: result.text,
+          followUps: [{ text: 'Ready to continue?', contentSid: sid, fallbackText: hint }],
+        }
       : say(`${result.text}\n\n${hint}`);
   }
 
@@ -819,7 +874,9 @@ export class CourseBot implements MessageHandler {
       enrollment.courseId,
       enrollment.lastDeliveredPosition,
     );
-    const quiz = lesson?.items.find((i): i is Extract<LessonItem, { kind: 'quiz' }> => i.kind === 'quiz');
+    const quiz = lesson?.items.find(
+      (i): i is Extract<LessonItem, { kind: 'quiz' }> => i.kind === 'quiz',
+    );
     if (!quiz || quiz.options.length === 0) {
       return say('There is no quiz in your current lesson. Send NEXT to continue.');
     }
@@ -864,9 +921,18 @@ export class CourseBot implements MessageHandler {
     const all = await this.enrollments.listForUser(await this.resolveOrgId(userId), userId);
     const state = buttonStateForStatuses(all.map((e) => e.status));
     if (all.length === 0) {
-      return this.withCommandButtons(say("You haven't started a course yet. Send COURSES to see what's available."), state, { messageType: 'command_response' });
+      return this.withCommandButtons(
+        say("You haven't started a course yet. Send COURSES to see what's available."),
+        state,
+        { messageType: 'command_response' },
+      );
     }
-    const icon: Record<EnrollmentStatus, string> = { active: '▶️', paused: '⏸️', pending: '⏳', completed: '✅' };
+    const icon: Record<EnrollmentStatus, string> = {
+      active: '▶️',
+      paused: '⏸️',
+      pending: '⏳',
+      completed: '✅',
+    };
     const lines = all.map(
       (e) =>
         `${icon[e.status]} *${e.courseTitle}* — ${e.lastDeliveredPosition} of ${plural(e.lessonCount, 'lesson')}` +
@@ -879,7 +945,11 @@ export class CourseBot implements MessageHandler {
       : paused
         ? 'Send RESUME to continue.'
         : 'Send COURSES to start another course.';
-    return this.withCommandButtons(say(`📊 *Your progress*\n\n${lines.join('\n')}\n\n${hint}`), state, { messageType: 'command_response' });
+    return this.withCommandButtons(
+      say(`📊 *Your progress*\n\n${lines.join('\n')}\n\n${hint}`),
+      state,
+      { messageType: 'command_response' },
+    );
   }
 
   // ---- shared wording -------------------------------------------------------------------
@@ -915,7 +985,11 @@ export class CourseBot implements MessageHandler {
    * A reply that already carries a button template (e.g. the fallback Chatbot's main-menu
    * buttons) keeps it when the selector has nothing better configured.
    */
-  private withCommandButtons(reply: ChatbotReply, state: ButtonState, context?: Partial<ButtonContext>): ChatbotReply {
+  private withCommandButtons(
+    reply: ChatbotReply,
+    state: ButtonState,
+    context?: Partial<ButtonContext>,
+  ): ChatbotReply {
     const ctx: ButtonContext = { messageType: 'command_response', buttonState: state, ...context };
     const contentSid = this.selectButtonSidForContext(ctx);
     if (!contentSid) return reply;

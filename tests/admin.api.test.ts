@@ -1,4 +1,7 @@
 import request from 'supertest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ADMIN_KEY, USER, alphaCourse, buildHarness } from './helpers';
 import { pgFileContext } from './pg.helpers';
@@ -50,6 +53,49 @@ describe('admin authentication', () => {
 });
 
 describe('course management', () => {
+  it('uploads valid MP3 audio to public media storage', async () => {
+    const mediaDir = await mkdtemp(path.join(os.tmpdir(), 'ekatra-course-audio-'));
+    try {
+      const h = await buildHarness({ pg: pgx.pool, mediaDir });
+      const bytes = Buffer.from([0xff, 0xfb, 0x90, 0x64, 0x00, 0x00]);
+      const uploaded = await request(h.app)
+        .post('/admin/course-audio')
+        .set(auth)
+        .type('application/octet-stream')
+        .send(bytes);
+
+      expect(uploaded.status).toBe(201);
+      expect(uploaded.body.url).toMatch(
+        /^https:\/\/example\.test\/media\/course-audio-[\da-f-]+\.mp3$/,
+      );
+      const fileName = path.basename(new URL(uploaded.body.url as string).pathname);
+      expect(await readFile(path.join(mediaDir, fileName))).toEqual(bytes);
+
+      const served = await request(h.app).get(new URL(uploaded.body.url as string).pathname);
+      expect(served.status).toBe(200);
+      expect(served.headers['content-type']).toMatch(/^audio\/mpeg/);
+      expect(served.body).toEqual(bytes);
+    } finally {
+      await rm(mediaDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects uploads that are not MP3 audio', async () => {
+    const mediaDir = await mkdtemp(path.join(os.tmpdir(), 'ekatra-course-audio-'));
+    try {
+      const h = await buildHarness({ pg: pgx.pool, mediaDir });
+      const response = await request(h.app)
+        .post('/admin/course-audio')
+        .set(auth)
+        .type('application/octet-stream')
+        .send(Buffer.from('not audio'));
+      expect(response.status).toBe(400);
+      expect(response.body.error.message).toContain('valid MP3');
+    } finally {
+      await rm(mediaDir, { recursive: true, force: true });
+    }
+  });
+
   it('create → list → view → update → publish → unpublish → delete', async () => {
     const a = await api();
 

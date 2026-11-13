@@ -1,21 +1,29 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/api/auth-context";
-import { adminApi, type Course, type CourseItem, type CourseLesson } from "@/api/admin";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import * as React from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/api/auth-context';
+import { adminApi, type Course, type CourseItem, type CourseLesson } from '@/api/admin';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 import {
-  Badge,
-} from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
-import { Plus, Trash2, Edit2, Play, FileText, Mic, FileType, HelpCircle, Loader2 } from "lucide-react";
-import { EmptyState } from "@/components/console/shared";
+  Plus,
+  Trash2,
+  Edit2,
+  Play,
+  FileText,
+  Mic,
+  FileType,
+  HelpCircle,
+  Loader2,
+} from 'lucide-react';
+import { EmptyState } from '@/components/console/shared';
 
-type ItemKind = CourseItem["kind"];
+type ItemKind = CourseItem['kind'];
 
 interface ModuleDraft {
   id: number | string;
@@ -41,11 +49,11 @@ interface CourseBuilderProps {
 
 export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuilderProps) {
   const { session } = useAuth();
-  const canManage = session?.role === "org_admin" || session?.role === "platform_admin";
+  const canManage = session?.role === 'org_admin' || session?.role === 'platform_admin';
   const client = useQueryClient();
 
-  const [title, setTitle] = React.useState(editingCourse?.title ?? "");
-  const [description, setDescription] = React.useState(editingCourse?.description ?? "");
+  const [title, setTitle] = React.useState(editingCourse?.title ?? '');
+  const [description, setDescription] = React.useState(editingCourse?.description ?? '');
   const [modules, setModules] = React.useState<ModuleDraft[]>(
     editingCourse?.lessons
       ? editingCourse.lessons.map((lesson, index) => ({
@@ -53,12 +61,13 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
           title: lesson.title,
           items: lesson.items.map((item) => ({ ...item })),
         }))
-      : [{ id: `new-${Date.now()}`, title: "Module 1", items: [] }],
+      : [{ id: `new-${Date.now()}`, title: 'Module 1', items: [] }],
   );
-  const [newModuleTitle, setNewModuleTitle] = React.useState("");
+  const [newModuleTitle, setNewModuleTitle] = React.useState('');
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [screenError, setScreenError] = React.useState("");
+  const [isUploadingAudio, setIsUploadingAudio] = React.useState(false);
+  const [screenError, setScreenError] = React.useState('');
 
   const createCourseMutation = useMutation({
     mutationFn: () =>
@@ -69,12 +78,12 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
       }),
     onSuccess: async ({ course }) => {
       setIsSubmitting(false);
-      await client.invalidateQueries({ queryKey: ["courses", "all"] });
+      await client.invalidateQueries({ queryKey: ['courses', 'all'] });
       onComplete(course);
     },
     onError: (error) => {
       setIsSubmitting(false);
-      setScreenError(error instanceof Error ? error.message : "Failed to create course");
+      setScreenError(error instanceof Error ? error.message : 'Failed to create course');
     },
   });
 
@@ -86,13 +95,13 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
       }),
     onSuccess: async ({ course }) => {
       setIsSubmitting(false);
-      await client.invalidateQueries({ queryKey: ["courses", "all"] });
-      await client.invalidateQueries({ queryKey: ["course", editingCourse!.id] });
+      await client.invalidateQueries({ queryKey: ['courses', 'all'] });
+      await client.invalidateQueries({ queryKey: ['course', editingCourse!.id] });
       onComplete(course);
     },
     onError: (error) => {
       setIsSubmitting(false);
-      setScreenError(error instanceof Error ? error.message : "Failed to update course");
+      setScreenError(error instanceof Error ? error.message : 'Failed to update course');
     },
   });
 
@@ -100,8 +109,10 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
 
   const allItemsValid = modules.every((module) =>
     module.items.every((item) => {
-      if (item.kind === "text" || item.kind === "link") return Boolean(item.text || item.label);
-      if (item.kind === "quiz") return Boolean(item.caption && item.options?.some((o) => o.correct));
+      if (item.kind === 'text' || item.kind === 'link') return Boolean(item.text || item.label);
+      if (item.kind === 'audio') return Boolean(item.url);
+      if (item.kind === 'quiz')
+        return Boolean(item.caption && item.options?.some((o) => o.correct));
       return Boolean(item.url || item.caption);
     }),
   );
@@ -109,7 +120,7 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
   const handleAddModule = () => {
     const title = newModuleTitle.trim() || `Module ${modules.length + 1}`;
     setModules([...modules, { id: `new-${Date.now()}`, title, items: [] }]);
-    setNewModuleTitle("");
+    setNewModuleTitle('');
   };
 
   const handleRemoveModule = (index: number) => {
@@ -118,17 +129,20 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
 
   const handleAddItem = (moduleIndex: number, kind: ItemKind) => {
     const item: CourseItemDraft =
-      kind === "quiz"
-        ? { kind, caption: "", explanation: null, options: [{ label: "", correct: true }, { label: "" }] }
-        : kind === "link"
-          ? { kind, label: "", url: "" }
-          : kind === "text"
-            ? { kind, text: "" }
-            : { kind, caption: "", url: "" };
+      kind === 'quiz'
+        ? {
+            kind,
+            caption: '',
+            explanation: null,
+            options: [{ label: '', correct: true }, { label: '' }],
+          }
+        : kind === 'link'
+          ? { kind, label: '', url: '' }
+          : kind === 'text'
+            ? { kind, text: '' }
+            : { kind, caption: '', url: '' };
     setModules((current) =>
-      current.map((m, i) =>
-        i === moduleIndex ? { ...m, items: [...m.items, item] } : m,
-      ),
+      current.map((m, i) => (i === moduleIndex ? { ...m, items: [...m.items, item] } : m)),
     );
   };
 
@@ -140,25 +154,52 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
     );
   };
 
-  const handleChangeItem = (moduleIndex: number, itemIndex: number, patch: Partial<CourseItemDraft>) => {
+  const handleChangeItem = (
+    moduleIndex: number,
+    itemIndex: number,
+    patch: Partial<CourseItemDraft>,
+  ) => {
     setModules((current) =>
       current.map((m, i) =>
         i === moduleIndex
-          ? { ...m, items: m.items.map((item, j) => (j === itemIndex ? { ...item, ...patch } : item)) }
+          ? {
+              ...m,
+              items: m.items.map((item, j) => (j === itemIndex ? { ...item, ...patch } : item)),
+            }
           : m,
       ),
     );
   };
 
+  const handleAudioUpload = async (moduleIndex: number, itemIndex: number, file?: File) => {
+    if (!file) return;
+    setScreenError('');
+    if (!file.name.toLowerCase().endsWith('.mp3') || file.size > 16 * 1024 * 1024) {
+      setScreenError('Choose an MP3 file that is no larger than 16 MB.');
+      return;
+    }
+    setIsUploadingAudio(true);
+    try {
+      const { url } = await adminApi.courses.uploadAudio(file);
+      handleChangeItem(moduleIndex, itemIndex, { url });
+    } catch (error) {
+      setScreenError(
+        error instanceof Error ? error.message : 'Audio upload failed. Please try again.',
+      );
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    setScreenError("");
+    setScreenError('');
     if (!title.trim()) {
-      setScreenError("Course title is required.");
+      setScreenError('Course title is required.');
       return;
     }
     if (!allItemsValid) {
-      setScreenError("Please fill in all required fields for every module item.");
+      setScreenError('Please fill in all required fields for every module item.');
       return;
     }
     setIsSubmitting(true);
@@ -183,13 +224,13 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
   }
 
   const kindLabels: Record<ItemKind, string> = {
-    text: "Text",
-    image: "Image",
-    document: "PDF / Document",
-    video: "Video",
-    audio: "Audio",
-    link: "Link",
-    quiz: "Quiz",
+    text: 'Text',
+    image: 'Image',
+    document: 'PDF / Document',
+    video: 'Video',
+    audio: 'Audio',
+    link: 'Link',
+    quiz: 'Quiz',
   };
 
   const kindIcons: Record<ItemKind, React.ElementType> = {
@@ -205,7 +246,7 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
   return (
     <Card className="max-w-4xl mx-auto">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle>{isEditing ? "Edit Course" : "Create Course"}</CardTitle>
+        <CardTitle>{isEditing ? 'Edit Course' : 'Create Course'}</CardTitle>
         <Button onClick={onClose} variant="outline" size="sm">
           Close
         </Button>
@@ -250,7 +291,11 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                 placeholder="New module title"
                 className="w-48"
               />
-              <Button onClick={handleAddModule} size="sm" disabled={isSubmitting}>
+              <Button
+                onClick={handleAddModule}
+                size="sm"
+                disabled={isSubmitting || isUploadingAudio}
+              >
                 <Plus size={16} />
                 Add Module
               </Button>
@@ -267,7 +312,9 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                       value={module.title}
                       onChange={(e) => {
                         setModules((current) =>
-                          current.map((m, i) => (i === moduleIndex ? { ...m, title: e.target.value } : m)),
+                          current.map((m, i) =>
+                            i === moduleIndex ? { ...m, title: e.target.value } : m,
+                          ),
                         );
                       }}
                     />
@@ -277,7 +324,7 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                     variant="outline"
                     size="sm"
                     className="text-destructive"
-                    disabled={modules.length === 1 || isSubmitting}
+                    disabled={modules.length === 1 || isSubmitting || isUploadingAudio}
                   >
                     <Trash2 size={16} /> Remove
                   </Button>
@@ -285,7 +332,9 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
               </CardHeader>
               <CardContent className="space-y-3">
                 {module.items.length === 0 ? (
-                  <EmptyState>No content items yet. Add text, PDF links, audio, or quiz questions below.</EmptyState>
+                  <EmptyState>
+                    No content items yet. Add text, PDF links, audio, or quiz questions below.
+                  </EmptyState>
                 ) : (
                   <div className="space-y-3">
                     {module.items.map((item, itemIndex) => (
@@ -299,56 +348,95 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                             variant="outline"
                             size="sm"
                             className="text-destructive"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isUploadingAudio}
                           >
                             <Trash2 size={16} />
                           </Button>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {item.kind === "text" ? (
+                          {item.kind === 'text' ? (
                             <div className="col-span-2">
                               <label className="text-xs font-medium">Text content</label>
                               <textarea
                                 className="min-h-[80px] w-full rounded-md border bg-background p-2 text-sm"
                                 maxLength={1200}
-                                value={item.text ?? ""}
+                                value={item.text ?? ''}
                                 onChange={(e) =>
                                   handleChangeItem(moduleIndex, itemIndex, { text: e.target.value })
                                 }
                                 placeholder="Enter the lesson text content..."
                               />
                             </div>
-                          ) : item.kind === "audio" ? (
+                          ) : item.kind === 'audio' ? (
                             <>
                               <div className="col-span-2">
                                 <label className="text-xs font-medium">Audio URL</label>
                                 <Input
-                                  value={item.url ?? ""}
+                                  value={item.url ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { url: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      url: e.target.value,
+                                    })
                                   }
-                                  placeholder="https://example.com/audio.mp3"
+                                  placeholder="https://example.com/audio.mp3 (or upload an MP3)"
                                 />
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <label
+                                  className="text-xs font-medium"
+                                  htmlFor={`audio-upload-${moduleIndex}-${itemIndex}`}
+                                >
+                                  Upload an MP3 (up to 16 MB)
+                                </label>
+                                <Input
+                                  accept=".mp3,audio/mpeg"
+                                  disabled={isUploadingAudio || isSubmitting}
+                                  id={`audio-upload-${moduleIndex}-${itemIndex}`}
+                                  onChange={(event) => {
+                                    void handleAudioUpload(
+                                      moduleIndex,
+                                      itemIndex,
+                                      event.currentTarget.files?.[0],
+                                    );
+                                    event.currentTarget.value = '';
+                                  }}
+                                  type="file"
+                                />
+                                {isUploadingAudio && (
+                                  <p className="text-xs text-muted-foreground">Uploading audio…</p>
+                                )}
                               </div>
                               <div>
                                 <label className="text-xs font-medium">Caption</label>
                                 <Input
-                                  value={item.caption ?? ""}
+                                  value={item.caption ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { caption: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      caption: e.target.value,
+                                    })
                                   }
                                   placeholder="Optional caption"
                                 />
                               </div>
                             </>
-                          ) : item.kind === "document" || item.kind === "image" || item.kind === "video" ? (
+                          ) : item.kind === 'document' ||
+                            item.kind === 'image' ||
+                            item.kind === 'video' ? (
                             <>
                               <div className="col-span-2">
-                                <label className="text-xs font-medium">{item.kind === "document" ? "PDF / Document URL" : item.kind === "image" ? "Image URL" : "Video URL"}</label>
+                                <label className="text-xs font-medium">
+                                  {item.kind === 'document'
+                                    ? 'PDF / Document URL'
+                                    : item.kind === 'image'
+                                      ? 'Image URL'
+                                      : 'Video URL'}
+                                </label>
                                 <Input
-                                  value={item.url ?? ""}
+                                  value={item.url ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { url: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      url: e.target.value,
+                                    })
                                   }
                                   placeholder="https://example.com/file.pdf"
                                 />
@@ -356,22 +444,26 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                               <div>
                                 <label className="text-xs font-medium">Caption</label>
                                 <Input
-                                  value={item.caption ?? ""}
+                                  value={item.caption ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { caption: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      caption: e.target.value,
+                                    })
                                   }
                                   placeholder="Optional caption"
                                 />
                               </div>
                             </>
-                          ) : item.kind === "link" ? (
+                          ) : item.kind === 'link' ? (
                             <>
                               <div>
                                 <label className="text-xs font-medium">Link label</label>
                                 <Input
-                                  value={item.label ?? ""}
+                                  value={item.label ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { label: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      label: e.target.value,
+                                    })
                                   }
                                   placeholder="e.g. Read more"
                                 />
@@ -379,9 +471,11 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                               <div>
                                 <label className="text-xs font-medium">URL</label>
                                 <Input
-                                  value={item.url ?? ""}
+                                  value={item.url ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { url: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      url: e.target.value,
+                                    })
                                   }
                                   placeholder="https://example.com"
                                 />
@@ -395,37 +489,47 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                                 <textarea
                                   className="min-h-[80px] w-full rounded-md border bg-background p-2 text-sm"
                                   maxLength={1200}
-                                  value={item.caption ?? ""}
+                                  value={item.caption ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { caption: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      caption: e.target.value,
+                                    })
                                   }
                                   placeholder="Ask a question about this module..."
                                 />
                               </div>
                               <div className="col-span-2">
-                                <label className="text-xs font-medium">Explanation (optional)</label>
+                                <label className="text-xs font-medium">
+                                  Explanation (optional)
+                                </label>
                                 <textarea
                                   className="min-h-[60px] w-full rounded-md border bg-background p-2 text-sm"
                                   maxLength={1000}
-                                  value={item.explanation ?? ""}
+                                  value={item.explanation ?? ''}
                                   onChange={(e) =>
-                                    handleChangeItem(moduleIndex, itemIndex, { explanation: e.target.value })
+                                    handleChangeItem(moduleIndex, itemIndex, {
+                                      explanation: e.target.value,
+                                    })
                                   }
                                   placeholder="Explain the correct answer..."
                                 />
                               </div>
                               <div className="col-span-2">
-                                <label className="text-xs font-medium">Options (one per line; prefix correct answer with *)</label>
+                                <label className="text-xs font-medium">
+                                  Options (one per line; prefix correct answer with *)
+                                </label>
                                 <textarea
                                   className="min-h-[80px] w-full rounded-md border bg-background p-2 text-sm"
-                                  value={(item.options ?? []).map((o) => `${o.correct ? "*" : ""}${o.label}`).join("\n")}
+                                  value={(item.options ?? [])
+                                    .map((o) => `${o.correct ? '*' : ''}${o.label}`)
+                                    .join('\n')}
                                   onChange={(e) => {
                                     const options = e.target.value
-                                      .split("\n")
+                                      .split('\n')
                                       .filter(Boolean)
                                       .map((line) => ({
-                                        label: line.replace(/^\*/, ""),
-                                        ...(line.startsWith("*") ? { correct: true } : {}),
+                                        label: line.replace(/^\*/, ''),
+                                        ...(line.startsWith('*') ? { correct: true } : {}),
                                       }));
                                     handleChangeItem(moduleIndex, itemIndex, { options });
                                   }}
@@ -436,23 +540,27 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                         </div>
                         <div className="flex items-end gap-2 pt-2">
                           <span className="text-xs text-muted-foreground">
-                            {item.kind === "quiz" ? "Learner picks an answer before moving on" : "Sent as a WhatsApp message"}
+                            {item.kind === 'quiz'
+                              ? 'Learner picks an answer before moving on'
+                              : 'Sent as a WhatsApp message'}
                           </span>
-                          {(["text", "document", "audio", "link", "quiz"] as ItemKind[]).map((kind) => {
-                            const Icon = kindIcons[kind];
-                            return (
-                              <Button
-                                key={kind}
-                                onClick={() => handleAddItem(moduleIndex, kind)}
-                                size="sm"
-                                variant="outline"
-                                disabled={isSubmitting}
-                              >
-                                <Icon size={14} />
-                                {kindLabels[kind]}
-                              </Button>
-                            );
-                          })}
+                          {(['text', 'document', 'audio', 'link', 'quiz'] as ItemKind[]).map(
+                            (kind) => {
+                              const Icon = kindIcons[kind];
+                              return (
+                                <Button
+                                  key={kind}
+                                  onClick={() => handleAddItem(moduleIndex, kind)}
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isSubmitting || isUploadingAudio}
+                                >
+                                  <Icon size={14} />
+                                  {kindLabels[kind]}
+                                </Button>
+                              );
+                            },
+                          )}
                         </div>
                       </div>
                     ))}
@@ -460,7 +568,7 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                 )}
                 <div className="flex items-center gap-2 pt-2">
                   <span className="text-xs text-muted-foreground">Add item:</span>
-                  {(["text", "document", "audio", "link", "quiz"] as ItemKind[]).map((kind) => {
+                  {(['text', 'document', 'audio', 'link', 'quiz'] as ItemKind[]).map((kind) => {
                     const Icon = kindIcons[kind];
                     return (
                       <Button
@@ -468,7 +576,7 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
                         onClick={() => handleAddItem(moduleIndex, kind)}
                         size="sm"
                         variant="outline"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || isUploadingAudio}
                       >
                         <Icon size={14} />
                         {kindLabels[kind]}
@@ -482,18 +590,24 @@ export function CourseBuilder({ onComplete, onClose, editingCourse }: CourseBuil
 
           <Button
             type="submit"
-            disabled={isSubmitting || !title.trim() || !allItemsValid || modules.some((m) => m.items.length === 0)}
+            disabled={
+              isSubmitting ||
+              isUploadingAudio ||
+              !title.trim() ||
+              !allItemsValid ||
+              modules.some((m) => m.items.length === 0)
+            }
             className="w-full"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isEditing ? "Updating course…" : "Creating course…"}
+                {isEditing ? 'Updating course…' : 'Creating course…'}
               </>
             ) : (
               <>
                 <Plus size={16} />
-                {isEditing ? "Update Course" : "Create Course"}
+                {isEditing ? 'Update Course' : 'Create Course'}
               </>
             )}
           </Button>

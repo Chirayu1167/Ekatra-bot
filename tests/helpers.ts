@@ -66,6 +66,8 @@ export interface HarnessOptions {
   validateWebhookSignature?: boolean;
   /** Override the console static directory for isolated integration tests. */
   consoleDir?: string;
+  /** Override public media storage for isolated upload tests. */
+  mediaDir?: string;
 }
 
 /** The real app + a real Postgres database; only Twilio is faked. */
@@ -112,6 +114,7 @@ export async function buildHarness(options: HarnessOptions) {
       logger: silentLogger,
     },
     logger: silentLogger,
+    mediaDir: options.mediaDir,
     ...(options.consoleDir && { consoleDir: options.consoleDir }),
     ...(options.admin !== false && {
       admin: {
@@ -127,6 +130,8 @@ export async function buildHarness(options: HarnessOptions) {
         outbound,
         schedules: new SchedulerService(db),
         deadLetters: new DeadLetterService(db, outbound, jobs, optOuts, enrollments, courses),
+        mediaDir: options.mediaDir,
+        publicBaseUrl: 'https://example.test',
         bootstrapKey: ADMIN_KEY,
       },
     }),
@@ -160,7 +165,10 @@ export async function buildHarness(options: HarnessOptions) {
   let counter = 0;
   const nextSid = () => `SMin${Date.now()}_${++counter}`;
 
-  const post = async (body: string, opts: { sid?: string; from?: string; payload?: string } = {}) => {
+  const post = async (
+    body: string,
+    opts: { sid?: string; from?: string; payload?: string } = {},
+  ) => {
     const res = await request(app)
       .post(WEBHOOK)
       .type('form')

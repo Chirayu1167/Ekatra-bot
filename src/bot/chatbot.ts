@@ -27,22 +27,22 @@ export interface ChatbotInput {
 export type DeliveryAction =
   | { type: 'none' }
   | {
-    type: 'begin';
-    orgId: number;
-    userId: string;
-    courseId: number;
-    position: number;
-    isFinal: boolean;
-  }
+      type: 'begin';
+      orgId: number;
+      userId: string;
+      courseId: number;
+      position: number;
+      isFinal: boolean;
+    }
   | {
-    type: 'advance';
-    orgId: number;
-    enrollmentId: number;
-    from: number;
-    to: number;
-    isFinal: boolean;
-    issueCertificate: boolean;
-  };
+      type: 'advance';
+      orgId: number;
+      enrollmentId: number;
+      from: number;
+      to: number;
+      isFinal: boolean;
+      issueCertificate: boolean;
+    };
 
 export interface ChatbotReply {
   text: string;
@@ -81,10 +81,10 @@ export interface MessageHandler {
 export const MENU = '';
 
 export const REPLIES = {
-  greeting: `Hello! 👋 Welcome to Ekatra.\n\nI'm your learning assistant.`,
-  startLearning: "Great! Let's get started. 📚\n\nYour first lesson will appear here soon.",
-  help: 'Send COURSES to browse, START <number> to begin, or NEXT for the next lesson.',
-  fallback: `I didn't quite understand that.\n\nSend COURSES to see available courses, or START <number> to begin.`,
+  greeting: `Hi! 👋 Welcome to Ekatra.\n\nI'm your learning assistant. Send COURSES to explore what's available.`,
+  startLearning: "Great—let's get started! 📚\n\nYour first lesson will arrive here shortly.",
+  help: 'Need a hand? Send COURSES to browse, START <number> to begin, or NEXT to continue your lesson.',
+  fallback: `I'm not sure I understood that.\n\nSend COURSES to browse available courses, or START <number> to begin.`,
 } as const;
 
 const GREETINGS = new Set(['hello', 'hi', 'hey', 'start']);

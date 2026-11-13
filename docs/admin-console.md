@@ -7,7 +7,8 @@ There is no Supabase, TanStack Start, server-function, Lovable, or alternate-pro
 ## Screens
 
 - **Courses:** search and draft/published list; create/edit; lessons with supported text, media,
-  link, and quiz items; optional quiz explanation up to 1000 characters; publish/unpublish/delete
+  link, and quiz items; audio accepts a public MP3 URL or an MP3 upload up to 16 MB; optional quiz
+  explanation up to 1000 characters; publish/unpublish/delete
   with confirmation and server validation/safeguard errors. Existing lesson IDs are retained on
   edits. Fields without a backend mapping are hidden.
 - **Learners:** paginated filters/search, opaque-ID detail, progress and enrollment status.
@@ -87,3 +88,6 @@ For UI-only work, run `npm run dev` inside `admin-ui/`; Vite uses `/console/` as
 proxies `/admin`, `/ready`, and `/worker-status` to the API at port 3000. Build from the root with
 `npm run build`, or in `admin-ui/` with `npm run build`. The root build includes the production
 console bundle in `admin-ui/dist`.
+
+Course MP3 uploads are stored in `MEDIA_DIR` and publicly served from `/media` so Twilio can
+retrieve them. Configure `PUBLIC_BASE_URL` to the public HTTPS origin before using uploads.
