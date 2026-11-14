@@ -149,8 +149,12 @@ const envSchema = z.object({
     .optional(),
   // Pool sizing and timeouts.
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
-  // off | require. Staging/production hosted databases must set require.
-  DATABASE_SSL: z.enum(['off', 'require'], { error: 'DATABASE_SSL must be "off" or "require"' }).default('off'),
+  // `require-no-verify` is for private hosted databases with self-signed certificates.
+  DATABASE_SSL: z
+    .enum(['off', 'require', 'require-no-verify'], {
+      error: 'DATABASE_SSL must be "off", "require", or "require-no-verify"',
+    })
+    .default('off'),
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300000).default(10000),
   DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(3600000).default(30000),
 });

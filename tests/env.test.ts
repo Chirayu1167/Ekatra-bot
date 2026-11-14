@@ -5,6 +5,7 @@ import {
   loadEnv,
   shouldRunMigrationsAtStartup,
 } from '../src/config/env';
+import { getPgSslOptions } from '../src/db/pg';
 
 const valid = {
   TWILIO_ACCOUNT_SID: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
@@ -18,6 +19,20 @@ describe('loadEnv', () => {
     const env = loadEnv(valid);
     expect(env.PORT).toBe(3000);
     expect(env.TWILIO_WEBHOOK_VALIDATE).toBe(true);
+  });
+
+  describe('PostgreSQL SSL options', () => {
+    it('keeps strict certificate verification as the default secure TLS mode', () => {
+      expect(getPgSslOptions('require')).toEqual({ rejectUnauthorized: true });
+    });
+
+    it('keeps TLS encryption while explicitly allowing a self-signed certificate', () => {
+      expect(getPgSslOptions('require-no-verify')).toEqual({ rejectUnauthorized: false });
+    });
+
+    it('disables TLS only when configured as off', () => {
+      expect(getPgSslOptions('off')).toBe(false);
+    });
   });
 
   it('parses explicit values', () => {
@@ -48,6 +63,12 @@ describe('loadEnv', () => {
 
   it('rejects an invalid DATABASE_SSL value', () => {
     expect(() => loadEnv({ ...valid, DATABASE_SSL: 'sometimes' })).toThrow(/DATABASE_SSL/);
+  });
+
+  it('accepts the explicit mode for encrypted connections to self-signed database certificates', () => {
+    expect(loadEnv({ ...valid, DATABASE_SSL: 'require-no-verify' }).DATABASE_SSL).toBe(
+      'require-no-verify',
+    );
   });
 
   it('rejects a sender without the whatsapp: prefix', () => {

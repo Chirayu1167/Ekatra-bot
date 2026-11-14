@@ -14,12 +14,19 @@ export async function transactional<T>(db: PgDb, fn: (tx: PgDb) => Promise<T>): 
 /** Either a pool (auto-checkout per query) or a checked-out client (inside a transaction). */
 export type PgDb = Pool | PoolClient;
 
+export type DatabaseSslMode = 'off' | 'require' | 'require-no-verify';
+
 export interface PoolConfig {
   connectionString: string;
   max: number;
-  ssl: boolean;
+  ssl: DatabaseSslMode;
   statementTimeoutMs: number;
   idleTimeoutMs: number;
+}
+
+export function getPgSslOptions(mode: DatabaseSslMode): false | { rejectUnauthorized: boolean } {
+  if (mode === 'off') return false;
+  return { rejectUnauthorized: mode === 'require' };
 }
 
 let int8ParserRegistered = false;
@@ -45,7 +52,7 @@ export function createPool(config: PoolConfig, logger: Logger = silentLogger): P
     max: config.max,
     statement_timeout: config.statementTimeoutMs,
     idleTimeoutMillis: config.idleTimeoutMs,
-    ...(config.ssl ? { ssl: { rejectUnauthorized: true } } : {}),
+    ssl: getPgSslOptions(config.ssl),
   });
   // Idle-client errors (e.g. the server closed a connection) must be logged, never crash.
   pool.on('error', (err) => {

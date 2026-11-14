@@ -39,7 +39,7 @@ production whenever possible.
 | --- | --- | --- | --- | --- |
 | `DATABASE_URL` | Yes / yes | None | Yes | `postgres://APP_USER:<password>@DB_HOST:5432/ekatra`; API/worker application connection. May use a managed transaction pooler if its transaction semantics are compatible with the app workload. |
 | `MIGRATION_DATABASE_URL` | Yes for deploy migration job / yes for deploy migration job | Unset; runner falls back to `DATABASE_URL` | Yes | `postgres://MIGRATOR:<password>@DIRECT_DB_HOST:5432/ekatra`; direct/session connection only. Session advisory locks do not work through transaction-pooling proxies. |
-| `DATABASE_SSL` | Yes (`require`) / yes (`require`) | `off` | No | `require` for hosted Postgres with TLS; certificate verification is enabled. |
+| `DATABASE_SSL` | Yes (`require` or `require-no-verify`) / yes (`require` or `require-no-verify`) | `off` | No | `require` verifies the server certificate. Use `require-no-verify` only when a private hosted Postgres endpoint presents a self-signed certificate; traffic remains encrypted, but the server identity is not verified. |
 | `DATABASE_POOL_MAX` | No / no | `10` | No | Integer `1..100`; size each API/worker pool. Must satisfy `2 * WORKER_MAX_JOBS_PER_TICK + 2 <= DATABASE_POOL_MAX`. |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | No / no | `10000` | No | Integer `1000..300000`; API query timeout in milliseconds. Migration runner uses a dedicated pool with statement timeout disabled. |
 | `DATABASE_IDLE_TIMEOUT_MS` | No / no | `30000` | No | Integer `1000..3600000`; idle pool-client timeout in milliseconds. |

@@ -379,7 +379,7 @@ async function main(): Promise<void> {
     {
       connectionString: env.DATABASE_URL,
       max: 2,
-      ssl: env.DATABASE_SSL === 'require',
+      ssl: env.DATABASE_SSL,
       // Import batches must not trip the app statement timeout.
       statementTimeoutMs: 0,
       idleTimeoutMs: env.DATABASE_IDLE_TIMEOUT_MS,

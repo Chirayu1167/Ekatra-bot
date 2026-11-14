@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
+import { getPgSslOptions } from '../db/pg';
 import { migratePostgres } from '../db/migratePg';
 import { createLogger } from '../logger';
 import { OptOutService } from '../services/optout.service';
@@ -14,8 +15,8 @@ async function main(): Promise<void> {
   }
 
   const sslMode = process.env['DATABASE_SSL'] || 'off';
-  if (sslMode !== 'off' && sslMode !== 'require') {
-    throw new Error('DATABASE_SSL must be "off" or "require"');
+  if (sslMode !== 'off' && sslMode !== 'require' && sslMode !== 'require-no-verify') {
+    throw new Error('DATABASE_SSL must be "off", "require", or "require-no-verify"');
   }
   const nodeEnv = process.env['NODE_ENV'] || 'development';
   const optOutSecret = process.env['OPTOUT_HASH_SECRET'] || undefined;
@@ -29,13 +30,14 @@ async function main(): Promise<void> {
     connectionString,
     max: 1,
     statement_timeout: 0,
-    ...(sslMode === 'require' ? { ssl: { rejectUnauthorized: true } } : {}),
+    ssl: getPgSslOptions(sslMode),
   });
   try {
     await migratePostgres(pool, undefined, logger);
     const optOuts = new OptOutService(pool, optOutSecret, optOutSecretPrevious);
     await optOuts.backfillHashes();
     await optOuts.migrateToHmac();
+    await optOuts.migrateToCurrentSecret();
     logger.info('db.migration_job.completed');
   } finally {
     await pool.end();

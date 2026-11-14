@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { COMMAND_HELP } from '../src/bot/courseBot';
 import { REPLIES } from '../src/bot/chatbot';
 import { parseKeyword } from '../src/bot/commands';
+import { query } from '../src/db/pg';
+import { OptOutService } from '../src/services/optout.service';
 import { OTHER_USER, USER, buildHarness, publishedCourse } from './helpers';
 import { pgFileContext } from './pg.helpers';
 
@@ -28,6 +30,26 @@ describe('parseKeyword', () => {
 });
 
 describe('STOP opt-out', () => {
+  it('migrates opt-out hashes to the new secret before the previous secret is removed', async () => {
+    const h = await buildHarness({ pg: pgx.pool });
+    const oldSecret = 'old-optout-secret'.repeat(2);
+    const newSecret = 'new-optout-secret'.repeat(2);
+    const previous = new OptOutService(h.pool, oldSecret);
+    await previous.optOut(USER);
+
+    const rotating = new OptOutService(h.pool, newSecret, oldSecret);
+    expect(await rotating.isOptedOut(USER)).toBe(true);
+    expect(await rotating.migrateToCurrentSecret()).toBe(1);
+
+    const { rows } = await query<{ phone_hash: string }>(
+      h.pool,
+      'SELECT phone_hash FROM opt_outs WHERE user_id = $1',
+      [USER],
+    );
+    expect(rows[0]?.phone_hash).toBe(rotating.hmacHash(USER));
+    expect(await new OptOutService(h.pool, newSecret).isOptedOut(USER)).toBe(true);
+  });
+
   it('unsubscribes, pauses the active course, keeps progress, and confirms once', async () => {
     const h = await buildHarness({ pg: pgx.pool });
     await publishedCourse(h);

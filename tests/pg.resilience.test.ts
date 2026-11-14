@@ -49,7 +49,7 @@ describe('pool exhaustion and connection loss', () => {
       {
         connectionString: 'postgres://postgres:postgres@127.0.0.1:1/ekatra',
         max: 1,
-        ssl: false,
+        ssl: 'off',
         statementTimeoutMs: 2000,
         idleTimeoutMs: 2000,
       },
@@ -64,7 +64,7 @@ describe('pool exhaustion and connection loss', () => {
       {
         connectionString: `postgres://postgres:postgres@127.0.0.1:${pgx.port}/${pgx.dbName}`,
         max: 5,
-        ssl: false,
+        ssl: 'off',
         statementTimeoutMs: 300,
         idleTimeoutMs: 10000,
       },
@@ -84,7 +84,7 @@ describe('pool exhaustion and connection loss', () => {
       {
         connectionString: `postgres://postgres:postgres@127.0.0.1:${pgx.port}/${pgx.dbName}`,
         max: 1,
-        ssl: false,
+        ssl: 'off',
         statementTimeoutMs: 10000,
         idleTimeoutMs: 10000,
       },

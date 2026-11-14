@@ -10,7 +10,8 @@ inventory, defaults, secret classification, and production requirements.
 
 Copy `.env.example` only as a starting template; replace all placeholders in a secret manager or
 process environment. Production requires Twilio credentials/from-number, `PUBLIC_BASE_URL`,
-`DATABASE_URL`, `DATABASE_SSL=require`, `OPTOUT_HASH_SECRET`, and signature validation enabled.
+`DATABASE_URL`, `DATABASE_SSL=require` (or `require-no-verify` only for private hosted
+databases with self-signed certificates), `OPTOUT_HASH_SECRET`, and signature validation enabled.
 `ADMIN_API_KEY` is needed only for bootstrap; see `docs/environment.md`.
 
 ## 2. Database, volumes, least-privilege role

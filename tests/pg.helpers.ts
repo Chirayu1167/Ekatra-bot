@@ -82,7 +82,7 @@ export function pgFileContext(fileTag: string) {
       {
         connectionString: fileUrl(dbName),
         max: 5,
-        ssl: false,
+        ssl: 'off',
         statementTimeoutMs: 10000,
         idleTimeoutMs: 10000,
       },

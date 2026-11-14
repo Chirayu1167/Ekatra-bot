@@ -135,10 +135,9 @@ export class OptOutService {
       this.db,
       "SELECT user_id FROM opt_outs WHERE phone_hash IS NULL AND user_id NOT LIKE 'anon:%'",
     );
-    const hmac = this.hmacHash;
     for (const row of rows) {
       await query(this.db, 'UPDATE opt_outs SET phone_hash = $1 WHERE user_id = $2', [
-        hmac(row.user_id),
+        this.hmacHash(row.user_id),
         row.user_id,
       ]);
     }
@@ -182,14 +181,13 @@ export class OptOutService {
    */
   async migrateToCurrentSecret(): Promise<number> {
     if (!this.currentSecret || !this.previousSecret) return 0;
-    const previous = this.previousHmac;
     const { rows } = await query<{ user_id: string; phone_hash: string }>(
       this.db,
       "SELECT user_id, phone_hash FROM opt_outs WHERE user_id NOT LIKE 'anon:%'",
     );
     let upgraded = 0;
     for (const row of rows) {
-      if (row.phone_hash === previous(row.user_id)) {
+      if (row.phone_hash === this.previousHmac(row.user_id)) {
         await query(this.db, 'UPDATE opt_outs SET phone_hash = $1 WHERE user_id = $2', [
           this.hmacHash(row.user_id),
           row.user_id,

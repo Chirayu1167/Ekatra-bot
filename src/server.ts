@@ -49,7 +49,7 @@ const pool = createPool(
   {
     connectionString: env.DATABASE_URL,
     max: env.DATABASE_POOL_MAX,
-    ssl: env.DATABASE_SSL === 'require',
+    ssl: env.DATABASE_SSL,
     statementTimeoutMs: env.DATABASE_STATEMENT_TIMEOUT_MS,
     idleTimeoutMs: env.DATABASE_IDLE_TIMEOUT_MS,
   },
@@ -86,6 +86,7 @@ async function buildApp() {
     await migratePostgres(pool, undefined, logger);
     await optOuts.backfillHashes();
     await optOuts.migrateToHmac();
+    await optOuts.migrateToCurrentSecret();
   } else {
     logger.info('db.migration_job.required_before_start');
   }

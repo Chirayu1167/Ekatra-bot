@@ -165,7 +165,7 @@ and the Twilio sender webhook.
 | `PUBLIC_BASE_URL`                                 | yes (prod) | Public base URL Twilio calls, e.g. `https://abc.ngrok-free.app` (no trailing slash). Required for signature validation. |
 | `DATABASE_URL`                                    | yes      | PostgreSQL connection URL, e.g. `postgres://ekatra:secret@db-host:5432/ekatra`. Tests provision their own databases. |
 | `DATABASE_POOL_MAX`                               | no       | App pool size. Default `10`.                                                                      |
-| `DATABASE_SSL`                                    | no       | `off` (default) or `require`. Staging/production hosted databases must use `require`.             |
+| `DATABASE_SSL`                                    | no       | `off`, `require` (verify certificate), or `require-no-verify` (encrypted connection without certificate verification; only for private hosted databases with self-signed certificates). |
 | `DATABASE_STATEMENT_TIMEOUT_MS` / `DATABASE_IDLE_TIMEOUT_MS` | no | Query watchdog (default `10000`) and idle-client reaping (default `30000`), in ms.  |
 | `ADMIN_API_KEY`                                   | yes (prod) | Bootstrap `platform_admin` key for `/admin` (min 16 chars). Unset = admin API off (404) unless users exist. Create orgs/users with it, then use per-user keys. See `docs/authz-policy.md`. |
 | `MEDIA_DIR`                                       | no       | Folder served publicly at `/media`. Default `./media`.                                            |

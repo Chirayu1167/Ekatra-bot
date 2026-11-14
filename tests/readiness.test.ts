@@ -81,7 +81,7 @@ describe('readiness / worker-status (A5)', () => {
       {
         connectionString: 'postgres://postgres:postgres@127.0.0.1:5432/nonexistent_db_xyz',
         max: 1,
-        ssl: false,
+        ssl: 'off',
         statementTimeoutMs: 2000,
         idleTimeoutMs: 2000,
       },
