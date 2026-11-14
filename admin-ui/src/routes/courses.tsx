@@ -95,6 +95,25 @@ function CoursesScreen() {
     },
   });
 
+  const publicationMutation = useMutation({
+    mutationFn: ({ id, publish }: { id: number; publish: boolean }) =>
+      publish ? adminApi.courses.publish(id) : adminApi.courses.unpublish(id),
+    onSuccess: ({ course }) => {
+      client.invalidateQueries({ queryKey: ["courses"] });
+      toast(course.status === "published" ? "Course published" : "Course unpublished", {
+        description:
+          course.status === "published"
+            ? "Learners can now enroll in this course."
+            : "This course is no longer available for enrollment.",
+      });
+    },
+    onError: (error) => {
+      toast("Course status could not be changed", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    },
+  });
+
   const handleEditCourse = (course: Course) => {
     setEditingCourseId(course.id);
     setShowBuilder(true);
@@ -168,7 +187,7 @@ function CoursesScreen() {
                   <TableHead className="text-center">Modules</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="w-[160px]">Actions</TableHead>
+                  <TableHead className="w-[220px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -185,6 +204,25 @@ function CoursesScreen() {
                       <TableCell>{new Date(course.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          {canManage && (
+                            <Button
+                              disabled={publicationMutation.isPending}
+                              onClick={() =>
+                                publicationMutation.mutate({
+                                  id: course.id,
+                                  publish: course.status !== "published",
+                                })
+                              }
+                              size="sm"
+                              variant={course.status === "published" ? "outline" : "default"}
+                            >
+                              {publicationMutation.isPending
+                                ? "Saving…"
+                                : course.status === "published"
+                                  ? "Unpublish"
+                                  : "Publish"}
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" onClick={() => handleViewCourse(course)}>
                             <Eye className="h-4 w-4" />
                             <span className="sr-only">View</span>

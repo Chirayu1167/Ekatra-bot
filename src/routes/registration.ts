@@ -324,6 +324,8 @@ function getRegistrationPage(): string {
     .next b { color: var(--ink); }
     .next ol { margin: 8px 0 0 20px; display: grid; gap: 4px; }
     .kbd { display: inline-block; background: #fff; border: 1px solid var(--blue-line); border-radius: 5px; padding: 0 6px; font-weight: 700; color: var(--blue); font-size: 13px; }
+    .whatsapp-btn { margin-top: 16px; background: var(--wa); color: var(--ink); text-decoration: none; }
+    .btn.whatsapp-btn:hover { background: #20BD5A; }
     .link-btn { margin-top: 16px; background: none; border: 0; color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; }
     .link-btn:hover { text-decoration: underline; }
 
@@ -452,11 +454,12 @@ function getRegistrationPage(): string {
         <div class="next">
           <b>What happens next</b>
           <ol>
-            <li>Open WhatsApp and send <span class="kbd">HI</span> to our number.</li>
+            <li>Send <span class="kbd">HI</span> to +1 775 993 0723 on WhatsApp.</li>
             <li>Tap <span class="kbd">Start Course</span> to begin.</li>
             <li>Use <span class="kbd">Next</span>, <span class="kbd">Pause</span> and <span class="kbd">Resume</span> as you go.</li>
           </ol>
         </div>
+        <a class="btn whatsapp-btn" href="https://wa.me/17759930723?text=HI" target="_blank" rel="noopener noreferrer">Open WhatsApp and send HI</a>
         <button class="link-btn" id="againBtn" type="button">Enrol someone else</button>
       </div>
     </aside>

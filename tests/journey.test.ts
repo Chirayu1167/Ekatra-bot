@@ -11,6 +11,15 @@ const register = (h: Harness, over: Record<string, unknown> = {}) =>
     .send({ name: 'Asha Rao', phoneNumber: '+91 98765 43210', courseId: h.course.id, consent: true, ...over });
 
 describe('Stage 1 learner journey', () => {
+  it('shows a WhatsApp shortcut to send HI after registration', async () => {
+    const h = await harness(pgx.pool);
+    const res = await request(h.app).get('/register');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('href="https://wa.me/17759930723?text=HI"');
+    expect(res.text).toContain('Send <span class="kbd">HI</span> to +1 775 993 0723 on WhatsApp.');
+  });
+
   it('1-2. web registration creates a pending enrollment (no welcome message sent)', async () => {
     const h = await harness(pgx.pool);
     const res = await register(h);
