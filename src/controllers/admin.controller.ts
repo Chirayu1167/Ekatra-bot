@@ -124,6 +124,14 @@ const deliveryQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+const certificateIssueSchema = z.object({
+  enrollmentId: z.coerce.number().int().positive().optional(),
+  phone: z.string().trim().min(5).optional(),
+  courseId: z.coerce.number().int().positive().optional(),
+  learnerName: z.string().trim().min(1).max(200).optional(),
+  sendNow: z.boolean().optional(),
+});
+
 export interface AdminControllerDeps {
   db: PgDb;
   courses: CourseService;
@@ -927,6 +935,98 @@ export function createAdminController({
         page: q.page,
         pageSize: q.pageSize,
         total,
+      });
+    }) satisfies RequestHandler,
+
+    issueCertificate: (async (req, res) => {
+      if (!certificates || !enrollments || !learners) throw new NotFoundError();
+      const org = orgId(req);
+      const body = parseBody(certificateIssueSchema, req.body);
+
+      let eId = body.enrollmentId;
+      if (!eId) {
+        if (!body.phone || !body.courseId) {
+          throw new BadRequestError('Either enrollmentId or both phone and courseId are required');
+        }
+        const cleanPhone = body.phone.trim();
+        let existing = await enrollments.find(org, cleanPhone, body.courseId);
+        if (!existing) {
+          const created = await enrollments.createPending(org, cleanPhone, body.courseId);
+          await enrollments.recordConsent(org, created.id, principal(req).userId);
+          existing = (await enrollments.findById(org, created.id)) ?? undefined;
+        }
+        if (!existing) {
+          throw new BadRequestError('Could not find or create enrollment for learner');
+        }
+        eId = existing.id;
+      }
+
+      const enrRow = await query<{ id: number; user_id: string; title: string }>(
+        db,
+        `SELECT e.id, e.user_id, c.title
+         FROM enrollments e
+         JOIN courses c ON c.id = e.course_id
+         WHERE e.id = $1 AND e.org_id = $2`,
+        [eId, org],
+      );
+      const enr = enrRow.rows[0];
+      if (!enr) throw new NotFoundError('Enrollment not found');
+
+      if (body.learnerName && body.learnerName.trim()) {
+        await learners.upsert(enr.user_id, body.learnerName.trim());
+      }
+
+      await query(
+        db,
+        `UPDATE enrollments SET status = 'completed', completed_at = COALESCE(completed_at, now()), updated_at = now() WHERE id = $1 AND org_id = $2`,
+        [eId, org],
+      );
+
+      const cert = await certificates.issue(org, eId);
+      if (!cert) {
+        throw new BadRequestError('Could not issue certificate for enrollment');
+      }
+
+      if (body.learnerName && body.learnerName.trim()) {
+        await query(
+          db,
+          `UPDATE certificates SET learner_name = $1 WHERE enrollment_id = $2`,
+          [body.learnerName.trim(), eId],
+        );
+        cert.learnerName = body.learnerName.trim();
+      }
+
+      let messageId: number | null = null;
+      if (body.sendNow && outbound) {
+        const canSend = optOuts ? !(await optOuts.isOptedOut(enr.user_id)) : true;
+        if (canSend) {
+          const certUrl = `${process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000'}/certificates/${cert.code}`;
+          const idempotencyKey = `cert-direct-send:${eId}:${Date.now()}`;
+          const created = await outbound.create({
+            idempotencyKey,
+            orgId: org,
+            userId: enr.user_id,
+            enrollmentId: eId,
+            courseId: null,
+            kind: 'certificate',
+            messages: [{ text: `Congratulations ${cert.learnerName}! Your certificate for "${cert.courseTitle}" is ready: ${certUrl}` }],
+          });
+          messageId = created.message.id;
+        }
+      }
+
+      await audit(req, 'certificate.issue', `enrollment:${eId} cert:${cert.code}`);
+      res.status(201).json({
+        ok: true,
+        certificate: {
+          id: cert.id,
+          code: cert.code,
+          learnerName: cert.learnerName,
+          courseTitle: cert.courseTitle,
+          issuedAt: cert.issuedAt,
+          enrollmentId: cert.enrollmentId,
+        },
+        messageId,
       });
     }) satisfies RequestHandler,
 

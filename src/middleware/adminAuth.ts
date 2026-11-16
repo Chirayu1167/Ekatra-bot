@@ -12,6 +12,10 @@ import type { OrganisationsService } from '../services/organisations.service';
 export function requireAdminKey(apiKey: string): RequestHandler {
   const expected = createHash('sha256').update(apiKey).digest();
   return (req, _res, next) => {
+    if (req.method === 'OPTIONS') {
+      next();
+      return;
+    }
     const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') ?? '');
     const given = createHash('sha256')
       .update(match?.[1]?.trim() ?? '')
@@ -42,6 +46,10 @@ export function authenticateAdmin(
     ? createHash('sha256').update(bootstrapKey).digest()
     : null;
   return async (req, res, next) => {
+    if (req.method === 'OPTIONS') {
+      next();
+      return;
+    }
     const token = bearerToken(req);
     if (!token) {
       next(new UnauthorizedError());

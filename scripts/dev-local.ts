@@ -144,16 +144,32 @@ async function main(): Promise<void> {
     WORKER_POLL_MS: '1000',
     SCHEDULER_ENABLED: 'false',
   };
+  const microlearnAdminUiDir = path.resolve(root, '..', 'microlearn-admin-ui');
+  const useMicrolearn = fs.existsSync(microlearnAdminUiDir);
+  const uiDir = useMicrolearn ? microlearnAdminUiDir : path.join(root, 'admin-ui');
+  const viteBin = path.join(uiDir, 'node_modules', 'vite', 'bin', 'vite.js');
+
+  if (useMicrolearn) {
+    try {
+      fs.writeFileSync(
+        path.join(microlearnAdminUiDir, '.env'),
+        `VITE_ADMIN_API_KEY=${apiKey}\nVITE_API_BASE=\n`,
+      );
+    } catch {
+      // ignore
+    }
+  }
+
   start('API', ['src/server.ts'], env);
   start('worker (fake sender)', ['src/worker.ts'], env);
   start(
     'admin UI',
-    ['admin-ui/node_modules/vite/bin/vite.js', 'dev', path.join(root, 'admin-ui'), '--host', '127.0.0.1'],
-    env,
+    [viteBin, 'dev', uiDir, '--host', '127.0.0.1', '--port', '5173'],
+    { ...env, VITE_ADMIN_API_KEY: apiKey },
   );
 
   console.log('Local services started; Ctrl+C stops the API, worker, Vite, and temporary PostgreSQL.');
-  console.log('Console: http://localhost:5173/console/');
+  console.log(useMicrolearn ? 'Console: http://localhost:5173/' : 'Console: http://localhost:5173/console/');
   console.log('API: http://localhost:3000/');
   console.log(`Demo administrator API key (shown once): ${apiKey}`);
 }
