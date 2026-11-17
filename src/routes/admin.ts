@@ -161,6 +161,7 @@ export function createAdminRouter({
 
   if (certificates) {
     router.get('/certificates', manageUsers, c.listCertificates);
+    router.post('/certificates', manageUsers, c.issueCertificate);
     router.post('/certificates/:id/resend', manageUsers, c.resendCertificate);
   }
 
