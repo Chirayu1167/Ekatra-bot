@@ -158,6 +158,7 @@ export function createAdminRouter({
   // ---- Delivery (org_admin + platform_admin) ------------------------------------------
 
   if (outbound) {
+    router.post('/broadcast', manageUsers, c.broadcast);
     router.get('/delivery', manageUsers, c.listDelivery);
     router.get('/delivery/:id', manageUsers, c.getDelivery);
   }

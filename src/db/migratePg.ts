@@ -91,6 +91,10 @@ CREATE INDEX broadcast_recipients_by_broadcast ON broadcast_recipients(broadcast
 CREATE INDEX broadcast_recipients_by_enrollment ON broadcast_recipients(enrollment_id);
 `;
 
+export const BROADCAST_OPTIONAL_COURSE_SQL = `
+ALTER TABLE broadcasts ALTER COLUMN course_id DROP NOT NULL;
+`;
+
 /** Ordered Postgres migrations. Append only; checksums reject silent edits to shipped ones. */
 export const PG_MIGRATIONS: readonly PgMigration[] = [
   { version: 1, name: 'baseline-v7-equivalent', sql: PG_BASELINE_SQL },
@@ -117,6 +121,11 @@ export const PG_MIGRATIONS: readonly PgMigration[] = [
     version: 7,
     name: 'course-scoped-broadcasts',
     sql: BROADCASTS_SQL,
+  },
+  {
+    version: 8,
+    name: 'broadcast-optional-course',
+    sql: BROADCAST_OPTIONAL_COURSE_SQL,
   },
 ];
 

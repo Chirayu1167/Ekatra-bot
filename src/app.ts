@@ -20,6 +20,7 @@ import type { JobService } from './services/jobs.service';
 import type { CourseService } from './services/course.service';
 import type { EnrollmentService } from './services/enrollment.service';
 import type { OrganisationsService } from './services/organisations.service';
+import type { OutboundService } from './services/outbound.service';
 import { metrics } from './services/metrics.service';
 import { metricsMiddleware } from './middleware/metrics';
 import { query } from './db/pg';
@@ -81,6 +82,7 @@ export const ROUTE_INVENTORY: { method: string; path: string; protection: string
   { method: 'POST', path: '/admin/enrollments', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/enrollments/:id/pause', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/enrollments/:id/resume', protection: 'admin:manage-users' },
+  { method: 'POST', path: '/admin/broadcast', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/delivery', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/delivery/:id', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/broadcasts/preview', protection: 'admin:manage-users' },
@@ -118,6 +120,7 @@ export interface AppDeps {
   orgs?: OrganisationsService;
   learners?: LearnerService;
   optOuts?: OptOutService;
+  outbound?: OutboundService;
   certificates?: CertificateService;
   /** Folder served publicly at /media so Twilio can fetch lesson attachments. */
   mediaDir?: string;
@@ -230,6 +233,7 @@ export function createApp(deps: AppDeps): Express {
         learners: deps.learners,
         optOuts: deps.optOuts,
         orgs: deps.orgs,
+        outbound: deps.outbound,
         logger,
       }),
     );

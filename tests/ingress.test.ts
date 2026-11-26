@@ -94,6 +94,7 @@ const EXPECTED_ROUTES: { method: string; path: string; protection: string }[] = 
   { method: 'POST', path: '/admin/enrollments', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/enrollments/:id/pause', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/enrollments/:id/resume', protection: 'admin:manage-users' },
+  { method: 'POST', path: '/admin/broadcast', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/delivery', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/delivery/:id', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/broadcasts/preview', protection: 'admin:manage-users' },

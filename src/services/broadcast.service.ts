@@ -56,7 +56,7 @@ export class BroadcastService {
   async preview(input: {
     orgId: number;
     actorId: number | null;
-    courseId: number;
+    courseId?: number;
     message: string;
     phoneNumbers: string[];
   }): Promise<{
@@ -69,14 +69,16 @@ export class BroadcastService {
       throw new BadRequestError(`A broadcast is limited to ${MAX_BROADCAST_RECIPIENTS} numbers`);
     }
 
-    const course = await query<{ status: string }>(
-      this.db,
-      'SELECT status FROM courses WHERE id = $1 AND org_id = $2',
-      [input.courseId, input.orgId],
-    );
-    if (!course.rows[0]) throw new NotFoundError('Course not found');
-    if (course.rows[0].status !== 'published') {
-      throw new ConflictError('Broadcasts require a published course');
+    if (input.courseId !== undefined) {
+      const course = await query<{ status: string }>(
+        this.db,
+        'SELECT status FROM courses WHERE id = $1 AND org_id = $2',
+        [input.courseId, input.orgId],
+      );
+      if (!course.rows[0]) throw new NotFoundError('Course not found');
+      if (course.rows[0].status !== 'published') {
+        throw new ConflictError('Broadcasts require a published course');
+      }
     }
 
     const rejected = new Map<BroadcastRejectionReason, number>();
@@ -114,7 +116,7 @@ export class BroadcastService {
         tx,
         `INSERT INTO broadcasts (org_id, course_id, created_by, message)
          VALUES ($1, $2, $3, $4) RETURNING id`,
-        [input.orgId, input.courseId, input.actorId, input.message],
+        [input.orgId, input.courseId ?? null, input.actorId, input.message],
       );
       const id = Number(created.rows[0]?.id);
       if (!id) throw new Error('Failed to create broadcast preview');
@@ -140,7 +142,7 @@ export class BroadcastService {
   async queue(orgId: number, broadcastId: number): Promise<{ queuedCount: number; skippedCount: number }> {
     const { rows } = await query<{
       id: number;
-      course_id: number;
+      course_id: number | null;
       message: string;
       status: string;
       expires_at: Date | string;
@@ -370,7 +372,7 @@ export class BroadcastService {
 
   private async checkRecipient(
     orgId: number,
-    courseId: number,
+    courseId: number | undefined,
     userId: string,
   ): Promise<
     | { eligible: true; recipient: EligibleRecipient }
@@ -378,10 +380,16 @@ export class BroadcastService {
   > {
     const { rows } = await query<EnrollmentCheck>(
       this.db,
-      `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
-       FROM enrollments e JOIN courses c ON c.id = e.course_id
-       WHERE e.org_id = $1 AND e.course_id = $2 AND e.user_id = $3`,
-      [orgId, courseId, userId],
+      courseId !== undefined
+        ? `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
+           FROM enrollments e JOIN courses c ON c.id = e.course_id
+           WHERE e.org_id = $1 AND e.course_id = $2 AND e.user_id = $3`
+        : `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
+           FROM enrollments e JOIN courses c ON c.id = e.course_id
+           WHERE e.org_id = $1 AND e.user_id = $2
+           ORDER BY (e.status = 'active') DESC, (e.consent_at IS NOT NULL) DESC, e.updated_at DESC
+           LIMIT 1`,
+      courseId !== undefined ? [orgId, courseId, userId] : [orgId, userId],
     );
     const row = rows[0];
     if (!row) return { eligible: false, reason: 'not_enrolled' };
@@ -399,7 +407,7 @@ export class BroadcastService {
 
   private async checkEnrollment(
     orgId: number,
-    courseId: number,
+    courseId: number | null | undefined,
     enrollmentId: number,
   ): Promise<
     | { eligible: true; recipient: EligibleRecipient }
@@ -407,10 +415,14 @@ export class BroadcastService {
   > {
     const { rows } = await query<EnrollmentCheck>(
       this.db,
-      `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
-       FROM enrollments e JOIN courses c ON c.id = e.course_id
-       WHERE e.org_id = $1 AND e.course_id = $2 AND e.id = $3`,
-      [orgId, courseId, enrollmentId],
+      courseId != null
+        ? `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
+           FROM enrollments e JOIN courses c ON c.id = e.course_id
+           WHERE e.org_id = $1 AND e.course_id = $2 AND e.id = $3`
+        : `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
+           FROM enrollments e JOIN courses c ON c.id = e.course_id
+           WHERE e.org_id = $1 AND e.id = $2`,
+      courseId != null ? [orgId, courseId, enrollmentId] : [orgId, enrollmentId],
     );
     const row = rows[0];
     if (!row) return { eligible: false, reason: 'not_enrolled' };

@@ -422,7 +422,7 @@ export const adminApi = {
       }),
   },
   broadcasts: {
-    preview: (body: { courseId: number; message: string; phoneNumbers: string[] }) =>
+    preview: (body: { courseId?: number; message: string; phoneNumbers: string[] }) =>
       request<BroadcastPreview>('/admin/broadcasts/preview', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -437,5 +437,12 @@ export const adminApi = {
   status: {
     readiness: () => request<Record<string, unknown>>('/ready'),
     worker: () => request<Record<string, unknown>>('/worker-status'),
+  },
+  broadcast: {
+    send: (body: { message: string; courseId?: number }) =>
+      request<{ ok: true; sent: number; skipped: number; total: number }>('/admin/broadcast', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 };

@@ -92,7 +92,7 @@ function BroadcastsScreen() {
   const previewMutation = useMutation({
     mutationFn: () =>
       adminApi.broadcasts.preview({
-        courseId: Number(courseId),
+        courseId: courseId && courseId !== "all" ? Number(courseId) : undefined,
         message: message.trim(),
         phoneNumbers,
       }),
@@ -178,7 +178,7 @@ function BroadcastsScreen() {
                 }}
                 value={courseId}
               >
-                <option value="">Select a published course</option>
+                <option value="">All registered learners (all courses)</option>
                 {(courses.data?.courses ?? []).map((course) => (
                   <option key={course.id} value={course.id}>{course.title}</option>
                 ))}

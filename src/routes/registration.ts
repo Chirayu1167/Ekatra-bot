@@ -7,6 +7,8 @@ import type { EnrollmentService } from '../services/enrollment.service';
 import type { LearnerService } from '../services/learner.service';
 import type { OptOutService } from '../services/optout.service';
 import type { OrganisationsService } from '../services/organisations.service';
+import type { OutboundService } from '../services/outbound.service';
+import type { ReplyMessage } from '../services/delivery';
 
 export interface RegistrationRouterOptions {
   courses: CourseService;
@@ -14,6 +16,7 @@ export interface RegistrationRouterOptions {
   learners: LearnerService;
   optOuts: OptOutService;
   orgs: OrganisationsService;
+  outbound?: OutboundService;
   logger?: Logger;
   now?: () => number;
 }
@@ -173,6 +176,40 @@ export function createRegistrationRouter(opts: RegistrationRouterOptions): Route
       await learners.upsert(phone, name);
       const enrollment = await enrollments.createPending(orgId, phone, courseId);
       logger.info('registration.created', { courseId });
+
+      if (opts.outbound) {
+        const availableCourses = (await courses.listCourses(orgId, { status: 'published' }))
+          .filter((c) => c.lessonCount > 0);
+        const courseLines = availableCourses.map(
+          (c) => `${c.id}. *${c.title}* — ${c.lessonCount} lesson${c.lessonCount === 1 ? '' : 's'}`,
+        );
+        const courseText = availableCourses.length > 0
+          ? `📚 Available courses:\n\n${courseLines.join('\n')}\n\nTap *Start Course* to begin "${course.title}", or reply *START <number>* to choose another course.`
+          : `Tap *Start Course* whenever you're ready to begin!`;
+
+        const welcomeMessages: ReplyMessage[] = [
+          { text: `Hi ${name}! 👋 Welcome!` },
+          {
+            text: courseText,
+            contentSid:
+              process.env.TWILIO_CONTENT_SID_START_COURSE ||
+              process.env.TWILIO_CONTENT_SID_WELCOME ||
+              undefined,
+            fallbackText: courseText,
+          },
+        ];
+
+        const welcomeKey = `welcome:${phone}:${enrollment.id}:${Date.now()}`;
+        await opts.outbound.create({
+          idempotencyKey: welcomeKey,
+          orgId,
+          userId: phone,
+          enrollmentId: enrollment.id,
+          courseId,
+          kind: 'template',
+          messages: welcomeMessages,
+        });
+      }
 
       return res.json({
         success: true,

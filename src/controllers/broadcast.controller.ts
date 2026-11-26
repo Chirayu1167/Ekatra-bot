@@ -8,7 +8,7 @@ import { MAX_BROADCAST_RECIPIENTS } from '../services/broadcast.service';
 import { orgId } from './admin.controller';
 
 const previewBody = z.object({
-  courseId: z.number().int().positive(),
+  courseId: z.number().int().positive().optional(),
   message: z.string().trim().min(1).max(1024),
   phoneNumbers: z.array(z.string().max(64)).min(1).max(MAX_BROADCAST_RECIPIENTS),
 });

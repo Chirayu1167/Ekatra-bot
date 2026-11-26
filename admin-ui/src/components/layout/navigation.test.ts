@@ -19,6 +19,7 @@ describe("role navigation", () => {
         "Delivery",
         "Failures",
         "Certificates",
+        "Broadcast",
         "Users and API keys",
         "Status",
       ]);

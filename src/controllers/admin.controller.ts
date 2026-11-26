@@ -132,6 +132,11 @@ const certificateIssueSchema = z.object({
   sendNow: z.boolean().optional(),
 });
 
+const broadcastSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  courseId: z.coerce.number().int().positive().optional(),
+});
+
 export interface AdminControllerDeps {
   db: PgDb;
   courses: CourseService;
@@ -878,6 +883,60 @@ export function createAdminController({
       }
 
       res.json(result);
+    }) satisfies RequestHandler,
+
+    // ---- Broadcast (org_admin + platform_admin) ----------------------------------------
+
+    broadcast: (async (req, res) => {
+      if (!outbound) throw new NotFoundError();
+      const org = orgId(req);
+      const body = parseBody(broadcastSchema, req.body);
+
+      // Determine recipients
+      let recipients: { userId: string }[];
+      if (body.courseId !== undefined) {
+        const course = await courses.getCourse(org, body.courseId);
+        if (!course) throw new NotFoundError('Course not found');
+        const rows = await query<{ user_id: string }>(
+          db,
+          'SELECT DISTINCT e.user_id FROM enrollments e WHERE e.org_id = $1 AND e.course_id = $2',
+          [org, body.courseId],
+        );
+        recipients = rows.rows.map((r) => ({ userId: r.user_id }));
+      } else {
+        const rows = await query<{ user_id: string }>(
+          db,
+          'SELECT DISTINCT e.user_id FROM enrollments e WHERE e.org_id = $1',
+          [org],
+        );
+        recipients = rows.rows.map((r) => ({ userId: r.user_id }));
+      }
+
+      let sent = 0;
+      let skipped = 0;
+      for (const r of recipients) {
+        if (optOuts && (await optOuts.isOptedOut(r.userId))) {
+          skipped++;
+          continue;
+        }
+        const key = `broadcast:${org}:${r.userId}:${Date.now()}`;
+        await outbound.create({
+          idempotencyKey: key,
+          orgId: org,
+          userId: r.userId,
+          courseId: body.courseId ?? null,
+          kind: 'system',
+          messages: [{ text: body.message }],
+        });
+        sent++;
+      }
+
+      await audit(
+        req,
+        'broadcast',
+        `course:${body.courseId ?? 'all'} sent:${sent} skipped:${skipped}`,
+      );
+      res.json({ ok: true, sent, skipped, total: recipients.length });
     }) satisfies RequestHandler,
 
     // ---- Certificates (org_admin + platform_admin) --------------------------------------

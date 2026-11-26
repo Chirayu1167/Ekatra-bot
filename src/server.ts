@@ -109,6 +109,7 @@ async function buildApp() {
     enrollments,
     learners,
     optOuts,
+    outbound,
     orgs,
     certificates,
     ...(adminOn && {
