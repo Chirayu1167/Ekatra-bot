@@ -93,6 +93,14 @@ CREATE INDEX broadcast_recipients_by_enrollment ON broadcast_recipients(enrollme
 
 export const BROADCAST_OPTIONAL_COURSE_SQL = `
 ALTER TABLE broadcasts ALTER COLUMN course_id DROP NOT NULL;
+ALTER TABLE broadcast_recipients ALTER COLUMN enrollment_id DROP NOT NULL;
+ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS user_id TEXT;
+DROP INDEX IF EXISTS broadcast_recipients_by_enrollment;
+CREATE INDEX IF NOT EXISTS broadcast_recipients_by_enrollment ON broadcast_recipients(enrollment_id);
+CREATE INDEX IF NOT EXISTS broadcast_recipients_by_user ON broadcast_recipients(user_id);
+ALTER TABLE broadcast_recipients DROP CONSTRAINT IF EXISTS broadcast_recipients_broadcast_id_enrollment_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS broadcast_recipients_dedupe ON broadcast_recipients (broadcast_id, COALESCE(enrollment_id, -1), COALESCE(user_id, ''));
+UPDATE enrollments SET consent_at = now(), consent_source = 'web_registration' WHERE consent_at IS NULL;
 `;
 
 /** Ordered Postgres migrations. Append only; checksums reject silent edits to shipped ones. */

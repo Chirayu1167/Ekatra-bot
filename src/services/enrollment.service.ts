@@ -174,8 +174,8 @@ export class EnrollmentService {
     const { rowCount } = await query(
       this.db,
       `INSERT INTO enrollments
-         (org_id, user_id, course_id, status, last_delivered_position, completed_at)
-       VALUES ($1, $2, $3, $4, $5, ${isFinal ? 'now()' : 'NULL'})
+         (org_id, user_id, course_id, status, last_delivered_position, completed_at, consent_at, consent_source)
+       VALUES ($1, $2, $3, $4, $5, ${isFinal ? 'now()' : 'NULL'}, now(), 'whatsapp_bot')
        ON CONFLICT (user_id, course_id) DO NOTHING`,
       [orgId, userId, courseId, isFinal ? 'completed' : 'active', deliveredPosition],
     );
@@ -290,8 +290,8 @@ export class EnrollmentService {
     }
     await query(
       this.db,
-      `INSERT INTO enrollments (org_id, user_id, course_id, status, last_delivered_position)
-       VALUES ($1, $2, $3, 'pending', 0)`,
+      `INSERT INTO enrollments (org_id, user_id, course_id, status, last_delivered_position, consent_at, consent_source)
+       VALUES ($1, $2, $3, 'pending', 0, now(), 'web_registration')`,
       [orgId, userId, courseId],
     );
     const created = await this.find(orgId, userId, courseId);

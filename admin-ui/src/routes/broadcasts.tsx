@@ -151,10 +151,9 @@ function BroadcastsScreen() {
   }
 
   return (
-    <ConsoleShell title="Course broadcast">
+    <ConsoleShell title="Broadcast & Invitations">
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Send a course-specific notice to learners already enrolled with recorded consent. Numbers are matched
-        against the selected course; this does not add learners or record consent.
+        Send a notice or invitation to enrolled learners or any outside numbers from manual entry or Excel import.
       </p>
 
       {courses.isError && <ErrorState message={errorMessage(courses.error)} />}
@@ -244,7 +243,7 @@ function BroadcastsScreen() {
               </span>
               <Button
                 disabled={
-                  !courseId || !message.trim() || phoneNumbers.length === 0 ||
+                  !message.trim() || phoneNumbers.length === 0 ||
                   phoneNumbers.length > MAX_BROADCAST_RECIPIENTS ||
                   previewMutation.isPending || queueMutation.isPending
                 }
@@ -261,11 +260,10 @@ function BroadcastsScreen() {
             <CardContent className="space-y-3 p-5">
               <h2 className="font-semibold">Delivery rules</h2>
               <p className="text-sm text-muted-foreground">
-                Only active, consented enrollments in this course can receive a notice. Opt-outs are always excluded.
+                All valid phone numbers can receive a notice or course invitation. Opt-outs are always excluded.
               </p>
               <p className="text-sm text-muted-foreground">
-                Free-form text is sent only within the learner’s 24-hour WhatsApp window. Outside it, an approved
-                broadcast template is required; there is no plain-text fallback.
+                Free-form text is sent within the learner’s 24-hour WhatsApp window, or using an approved template.
               </p>
               <p className="text-sm text-muted-foreground">
                 Review the match counts before queueing. The server checks eligibility again immediately before sending.

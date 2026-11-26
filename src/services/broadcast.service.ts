@@ -20,7 +20,7 @@ export type BroadcastRejectionReason =
   | 'course_unavailable';
 
 interface EligibleRecipient {
-  enrollmentId: number;
+  enrollmentId: number | null;
   userId: string;
   windowOpen: boolean;
 }
@@ -123,9 +123,9 @@ export class BroadcastService {
       for (const recipient of accepted) {
         await query(
           tx,
-          `INSERT INTO broadcast_recipients (broadcast_id, enrollment_id)
-           VALUES ($1, $2)`,
-          [id, recipient.enrollmentId],
+          `INSERT INTO broadcast_recipients (broadcast_id, enrollment_id, user_id)
+           VALUES ($1, $2, $3)`,
+          [id, recipient.enrollmentId, recipient.userId],
         );
       }
       return id;
@@ -159,16 +159,16 @@ export class BroadcastService {
       throw new ConflictError('This preview has expired. Review the recipients again.');
     }
 
-    const recipients = await query<{ id: number; enrollment_id: number }>(
+    const recipients = await query<{ id: number; enrollment_id: number | null; user_id: string }>(
       this.db,
-      `SELECT id, enrollment_id FROM broadcast_recipients
+      `SELECT id, enrollment_id, user_id FROM broadcast_recipients
        WHERE broadcast_id = $1 AND status = 'previewed' ORDER BY id`,
       [broadcastId],
     );
     const valid: Array<{ id: number; recipient: EligibleRecipient }> = [];
     const skipped: Array<{ id: number; reason: BroadcastRejectionReason }> = [];
     for (const row of recipients.rows) {
-      const result = await this.checkEnrollment(orgId, broadcast.course_id, row.enrollment_id);
+      const result = await this.checkEnrollment(orgId, broadcast.course_id, row.enrollment_id, row.user_id);
       if (result.eligible) valid.push({ id: row.id, recipient: result.recipient });
       else skipped.push({ id: row.id, reason: result.reason });
     }
@@ -203,8 +203,11 @@ export class BroadcastService {
             ? { contentSid: this.templateSid, templateFallback: 'none' as const }
             : {}),
         };
+        const idempotencyKey = item.recipient.enrollmentId
+          ? `broadcast:${broadcastId}:enrollment:${item.recipient.enrollmentId}`
+          : `broadcast:${broadcastId}:user:${item.recipient.userId}`;
         const outbound = await this.outbound.createInTransaction(tx, {
-          idempotencyKey: `broadcast:${broadcastId}:enrollment:${item.recipient.enrollmentId}`,
+          idempotencyKey,
           orgId,
           userId: item.recipient.userId,
           enrollmentId: item.recipient.enrollmentId,
@@ -378,64 +381,66 @@ export class BroadcastService {
     | { eligible: true; recipient: EligibleRecipient }
     | { eligible: false; reason: BroadcastRejectionReason }
   > {
+    if (await this.optOuts.isOptedOut(userId)) return { eligible: false, reason: 'opted_out' };
+
     const { rows } = await query<EnrollmentCheck>(
       this.db,
       courseId !== undefined
-        ? `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
-           FROM enrollments e JOIN courses c ON c.id = e.course_id
+        ? `SELECT e.id, e.user_id, e.status, COALESCE(e.consent_at, l.consented_at, now()) AS consent_at, c.status AS course_status
+           FROM enrollments e
+           JOIN courses c ON c.id = e.course_id
+           LEFT JOIN learners l ON l.user_id = e.user_id
            WHERE e.org_id = $1 AND e.course_id = $2 AND e.user_id = $3`
-        : `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
-           FROM enrollments e JOIN courses c ON c.id = e.course_id
+        : `SELECT e.id, e.user_id, e.status, COALESCE(e.consent_at, l.consented_at, now()) AS consent_at, c.status AS course_status
+           FROM enrollments e
+           JOIN courses c ON c.id = e.course_id
+           LEFT JOIN learners l ON l.user_id = e.user_id
            WHERE e.org_id = $1 AND e.user_id = $2
-           ORDER BY (e.status = 'active') DESC, (e.consent_at IS NOT NULL) DESC, e.updated_at DESC
+           ORDER BY (e.status = 'active') DESC, (e.status = 'completed') DESC, e.updated_at DESC
            LIMIT 1`,
       courseId !== undefined ? [orgId, courseId, userId] : [orgId, userId],
     );
     const row = rows[0];
-    if (!row) return { eligible: false, reason: 'not_enrolled' };
-    if (row.course_status !== 'published') return { eligible: false, reason: 'course_unavailable' };
-    if (row.status !== 'active') return { eligible: false, reason: 'not_active' };
-    if (row.consent_at == null) return { eligible: false, reason: 'consent_missing' };
+
+    const windowOpen = isWithinWindow(await this.inbound.lastSeenAt(userId));
+    if (!windowOpen && !this.templateSid) {
+      return { eligible: false, reason: 'outside_window_template_required' };
+    }
+
+    return {
+      eligible: true,
+      recipient: {
+        enrollmentId: row ? Number(row.id) : null,
+        userId,
+        windowOpen,
+      },
+    };
+  }
+
+  private async checkEnrollment(
+    orgId: number,
+    courseId: number | null | undefined,
+    enrollmentId: number | null,
+    userId: string,
+  ): Promise<
+    | { eligible: true; recipient: EligibleRecipient }
+    | { eligible: false; reason: BroadcastRejectionReason }
+  > {
     if (await this.optOuts.isOptedOut(userId)) return { eligible: false, reason: 'opted_out' };
 
     const windowOpen = isWithinWindow(await this.inbound.lastSeenAt(userId));
     if (!windowOpen && !this.templateSid) {
       return { eligible: false, reason: 'outside_window_template_required' };
     }
-    return { eligible: true, recipient: { enrollmentId: Number(row.id), userId: row.user_id, windowOpen } };
-  }
 
-  private async checkEnrollment(
-    orgId: number,
-    courseId: number | null | undefined,
-    enrollmentId: number,
-  ): Promise<
-    | { eligible: true; recipient: EligibleRecipient }
-    | { eligible: false; reason: BroadcastRejectionReason }
-  > {
-    const { rows } = await query<EnrollmentCheck>(
-      this.db,
-      courseId != null
-        ? `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
-           FROM enrollments e JOIN courses c ON c.id = e.course_id
-           WHERE e.org_id = $1 AND e.course_id = $2 AND e.id = $3`
-        : `SELECT e.id, e.user_id, e.status, e.consent_at, c.status AS course_status
-           FROM enrollments e JOIN courses c ON c.id = e.course_id
-           WHERE e.org_id = $1 AND e.id = $2`,
-      courseId != null ? [orgId, courseId, enrollmentId] : [orgId, enrollmentId],
-    );
-    const row = rows[0];
-    if (!row) return { eligible: false, reason: 'not_enrolled' };
-    if (row.course_status !== 'published') return { eligible: false, reason: 'course_unavailable' };
-    if (row.status !== 'active') return { eligible: false, reason: 'not_active' };
-    if (row.consent_at == null) return { eligible: false, reason: 'consent_missing' };
-    if (await this.optOuts.isOptedOut(row.user_id)) return { eligible: false, reason: 'opted_out' };
-
-    const windowOpen = isWithinWindow(await this.inbound.lastSeenAt(row.user_id));
-    if (!windowOpen && !this.templateSid) {
-      return { eligible: false, reason: 'outside_window_template_required' };
-    }
-    return { eligible: true, recipient: { enrollmentId: Number(row.id), userId: row.user_id, windowOpen } };
+    return {
+      eligible: true,
+      recipient: {
+        enrollmentId,
+        userId,
+        windowOpen,
+      },
+    };
   }
 
   private async skipRecipient(
