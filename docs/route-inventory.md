@@ -44,12 +44,19 @@ unmounted or land in this list behind auth.
 | `POST /admin/enrollments/:id/pause`, `POST /admin/enrollments/:id/resume`                                                                         | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
 | `GET /admin/delivery` (list outbound messages: status, kind, provider message id, attempts, timestamps, learner opaque id; no message bodies)     | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
 | `GET /admin/delivery/:id` (detail with attempt chain; message text only for org_admin and platform_admin)                                         | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
+| `POST /admin/broadcasts/preview` (published course, message, up to 100 selected international numbers; returns eligible/template counts and rejection counts only) | `platform_admin` + `org_admin`, tenant-scoped, audited; requires active consented enrollment |
+| `POST /admin/broadcasts/:id/queue` (rechecks eligibility and queues accepted recipients through durable outbound jobs)                             | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
+| `GET /admin/broadcasts/:id` (aggregate queued/sent/delivery/failure/skip counts; no phone numbers)                                                | `platform_admin` + `org_admin`, tenant-scoped                                        |
 | `GET /admin/certificates` (completion records list)                                                                                               | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
 | `POST /admin/certificates/:id/resend` (re-send through outbound pipeline, OptOutGuardSender applies)                                              | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
 | `GET /admin/schedule-preview?enrollmentId=<id>&count=5` (next N send times)                                                                       | `platform_admin` + `org_admin`, tenant-scoped, audited                               |
 
 401 = missing/invalid/revoked/expired credential. 403 = valid credential, insufficient role.
 429 = auth-failure budget spent (`RATE_LIMIT_AUTH_FAILURES_PER_HOUR`, default 100/IP/hour).
+
+Broadcast input does not create learners or consent. An approved broadcast template is required
+outside the 24-hour WhatsApp customer-service window; the worker rechecks enrollment, consent,
+opt-out, course status, and window eligibility.
 
 Instructor learner read access covers every learner in the instructor's org; there is no
 per-course assignment. Introducing that restriction would require a migration. Instructors

@@ -150,6 +150,17 @@ export class OutboundService {
     return row ? mapRow(row) : undefined;
   }
 
+  /** Replace the single unsent payload when a broadcast crosses the WhatsApp window. */
+  async replaceMessagesBeforeSend(messageId: number, messages: ReplyMessage[]): Promise<boolean> {
+    const { rowCount } = await query(
+      this.db,
+      `UPDATE outbound_messages SET messages = $2, updated_at = now()
+       WHERE id = $1 AND status IN ('queued', 'failed')`,
+      [messageId, JSON.stringify(messages)],
+    );
+    return rowCount === 1;
+  }
+
   /** Positions of lesson items already confirmed sent for this message. */
   async listSentItemPositions(messageId: number): Promise<Set<number>> {
     const { rows } = await query<{ item_position: number }>(

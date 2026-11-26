@@ -62,6 +62,9 @@ const envSchema = z.object({
   // window (see docs/scheduling.md). Its button payload maps to NEXT, which delivers the
   // pending lesson. Optional: unset means closed-window scheduled lessons fail visibly.
   TWILIO_CONTENT_SID_SCHEDULE: contentSid(),
+  // Approved template for course broadcasts outside the 24-hour window. The template must
+  // accept the broadcast text as variable {{1}}; no free-form fallback is permitted.
+  TWILIO_CONTENT_SID_BROADCAST: contentSid(),
   // Hard request timeout for every Twilio API call (ms), in addition to the Promise.race backstop.
   TWILIO_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
   // Signs certificate links. Defaults to a value derived from TWILIO_AUTH_TOKEN if unset.

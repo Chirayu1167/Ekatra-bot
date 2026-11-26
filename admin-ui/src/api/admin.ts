@@ -1,6 +1,7 @@
 import { request } from './client';
 
 export type AdminRole = 'platform_admin' | 'org_admin' | 'instructor';
+export const MAX_BROADCAST_RECIPIENTS = 100;
 export type EnrollmentStatus = 'pending' | 'active' | 'paused' | 'completed';
 export type CourseStatus = 'draft' | 'published';
 
@@ -150,6 +151,38 @@ export interface Failure {
   messageStatus: string | null;
   attempts: number | null;
   [key: string]: unknown;
+}
+
+export type BroadcastRejectionReason =
+  | 'invalid_number'
+  | 'duplicate'
+  | 'not_enrolled'
+  | 'not_active'
+  | 'consent_missing'
+  | 'opted_out'
+  | 'outside_window_template_required'
+  | 'course_unavailable';
+
+export interface BroadcastPreview {
+  id: number;
+  acceptedCount: number;
+  templateCount: number;
+  rejected: Array<{ reason: BroadcastRejectionReason; count: number }>;
+}
+
+export interface BroadcastStatus {
+  id: number;
+  status: 'draft' | 'queued';
+  total: number;
+  previewed: number;
+  queued: number;
+  sending: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  unknown: number;
+  skipped: number;
 }
 
 function queryString(values: Record<string, string | number | boolean | undefined>): string {
@@ -387,6 +420,19 @@ export const adminApi = {
         method: 'POST',
         body: JSON.stringify({ reason }),
       }),
+  },
+  broadcasts: {
+    preview: (body: { courseId: number; message: string; phoneNumbers: string[] }) =>
+      request<BroadcastPreview>('/admin/broadcasts/preview', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    queue: (id: number) =>
+      request<{ queued: true; queuedCount: number; skippedCount: number }>(
+        `/admin/broadcasts/${id}/queue`,
+        { method: 'POST', body: '{}' },
+      ),
+    status: (id: number) => request<BroadcastStatus>(`/admin/broadcasts/${id}`),
   },
   status: {
     readiness: () => request<Record<string, unknown>>('/ready'),

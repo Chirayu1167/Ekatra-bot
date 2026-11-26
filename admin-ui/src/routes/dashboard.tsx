@@ -4,7 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/api/auth-context";
-import { adminApi, type Course, type Learner, type DeliveryMessage, type Failure } from "@/api/admin";
+import { adminApi, type Course, type Learner, type FailureCount } from "@/api/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Stats } from "@/components/dashboard/Stats";
 import { Button } from "@/components/ui/button";
@@ -22,18 +22,15 @@ interface DashboardStat {
   trend: "up" | "down" | "neutral";
 }
 
-function computeStats(
+export function computeStats(
   courses: Course[],
-  learners: Learner[],
-  deliveries: DeliveryMessage[],
-  failures: Failure[],
+  activeEnrollments: number,
+  completedEnrollments: number,
+  failureCounts: FailureCount[],
 ): DashboardStat[] {
   const totalCourses = courses.length;
   const publishedCourses = courses.filter((c) => c.status === "published").length;
-  const totalLearners = learners.length;
-  const activeLearners = learners.filter((l) => l.status === "active").length;
-  const totalMessages = deliveries.length;
-  const failedMessages = failures.filter((f) => f.status === "open").length;
+  const openFailures = failureCounts.reduce((total, item) => total + item.count, 0);
 
   return [
     {
@@ -43,22 +40,22 @@ function computeStats(
       trend: "neutral",
     },
     {
-      name: "Active Learners",
-      value: activeLearners,
-      change: `${totalLearners} total`,
+      name: "Active Enrollments",
+      value: activeEnrollments,
+      change: "course in progress",
       trend: "up",
     },
     {
-      name: "Messages Sent",
-      value: totalMessages,
-      change: `${failedMessages} failed`,
-      trend: totalMessages > 0 ? "up" : "neutral",
+      name: "Recorded Completions",
+      value: completedEnrollments,
+      change: "courses completed",
+      trend: "neutral",
     },
     {
       name: "Open Failures",
-      value: failedMessages,
+      value: openFailures,
       change: "needs attention",
-      trend: failedMessages > 0 ? "down" : "up",
+      trend: openFailures > 0 ? "down" : "up",
     },
   ];
 }
@@ -80,22 +77,27 @@ function DashboardScreen() {
     queryKey: ["dashboard", "learners"],
     queryFn: () => adminApi.learners.list(),
   });
-  const deliveryQuery = useQuery({
-    queryKey: ["dashboard", "delivery"],
-    queryFn: () => adminApi.delivery.list({ pageSize: 1 }),
+  const activeEnrollmentsQuery = useQuery({
+    queryKey: ["dashboard", "active-enrollments"],
+    queryFn: () => adminApi.learners.list({ status: "active", pageSize: 1 }),
+  });
+  const completedEnrollmentsQuery = useQuery({
+    queryKey: ["dashboard", "completed-enrollments"],
+    queryFn: () => adminApi.learners.list({ status: "completed", pageSize: 1 }),
   });
   const failuresQuery = useQuery({
     queryKey: ["dashboard", "failures"],
-    queryFn: () => adminApi.failures.list({ limit: 1 }),
+    queryFn: () => adminApi.failures.list({ limit: 5 }),
   });
 
-  const loading = coursesQuery.isPending || learnersQuery.isPending || deliveryQuery.isPending || failuresQuery.isPending;
+  const loading = coursesQuery.isPending || learnersQuery.isPending ||
+    activeEnrollmentsQuery.isPending || completedEnrollmentsQuery.isPending || failuresQuery.isPending;
 
   const stats = computeStats(
     coursesQuery.data?.courses ?? [],
-    learnersQuery.data?.learners ?? [],
-    deliveryQuery.data?.messages ?? [],
-    failuresQuery.data?.failures ?? [],
+    activeEnrollmentsQuery.data?.total ?? 0,
+    completedEnrollmentsQuery.data?.total ?? 0,
+    failuresQuery.data?.counts ?? [],
   );
 
   const courses = (coursesQuery.data?.courses ?? []).slice(0, 6);

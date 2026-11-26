@@ -14,6 +14,7 @@ describe("role navigation", () => {
       expect(navigationForRole(role).map((item) => item.label)).toEqual([
         "Courses",
         "Learners",
+        "Broadcasts",
         "Schedules",
         "Delivery",
         "Failures",

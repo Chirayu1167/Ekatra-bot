@@ -103,7 +103,7 @@ Items marked `[NOT IMPLEMENTED]` are explicitly out of Stage 1 scope.
 
 | Screen | Status | Evidence |
 |---|---|---|
-| Dashboard (courses list + status) | Implemented | admin-ui/src/routes/dashboard.tsx |
+| Dashboard (courses, active enrollments, recorded completions, open delivery failures) | Implemented | admin-ui/src/routes/dashboard.tsx |
 | Courses (create/edit/publish/unpublish/delete) | Implemented | admin-ui/src/routes/courses.tsx |
 | Lessons (media/quiz editing, preserved IDs) | Implemented | courses-screen.tsx |
 | Learners (list, detail, masked phone, reveal) | Implemented | admin-ui/src/routes/learners.tsx |
@@ -115,6 +115,7 @@ Items marked `[NOT IMPLEMENTED]` are explicitly out of Stage 1 scope.
 | Users & API keys (create, rotate, revoke, recover) | Implemented | admin-ui/src/routes/users.tsx |
 | Audit (read-only viewer) | Implemented | admin-ui/src/routes/audit.tsx (via navigation) |
 | Status (readiness + worker heartbeat) | Implemented | admin-ui/src/routes/status.tsx |
+| Course broadcasts (manual or `.xlsx` number selection, eligibility preview, bounded queue) | Implemented in code; staging acceptance pending | migration v7, `/admin/broadcasts/*`, admin-ui/src/routes/broadcasts.tsx |
 | Strict CSP for /console | Implemented | src/app.ts console serving |
 | Instructor nav: Courses + Learners only | Implemented | navigation.ts, navigation.test.tsx |
 

@@ -27,6 +27,7 @@ import { JobService } from './services/jobs.service';
 import { OutboundService } from './services/outbound.service';
 import { SchedulerService } from './services/scheduler.service';
 import { OptOutService } from './services/optout.service';
+import { BroadcastService } from './services/broadcast.service';
 import { createTwilioClient, TwilioWhatsAppService } from './services/whatsapp.service';
 import { LocalFakeWhatsAppSender } from './services/localFakeSender';
 import { drainJobs, reclaimStuck, type ProcessorDeps } from './worker/processor';
@@ -82,6 +83,17 @@ function buildProcessor(): ProcessorDeps {
   const enrollments = new EnrollmentService(db);
   const learners = new LearnerService(db);
   const optOuts = new OptOutService(db, env.OPTOUT_HASH_SECRET, env.OPTOUT_HASH_SECRET_PREVIOUS);
+  const inbound = new InboundEventService(db);
+  const jobs = new JobService(db);
+  const outbound = new OutboundService(db);
+  const broadcasts = new BroadcastService(
+    db,
+    optOuts,
+    inbound,
+    outbound,
+    jobs,
+    env.TWILIO_CONTENT_SID_BROADCAST,
+  );
   const certificates = new CertificateService(
     db,
     learners,
@@ -148,6 +160,7 @@ function buildProcessor(): ProcessorDeps {
     chatbot,
     rawSender,
     optOuts,
+    broadcasts,
     enrollments,
     certificates,
     courses,
@@ -167,9 +180,9 @@ function buildProcessor(): ProcessorDeps {
       learnerName: (userId) => learners.getName(userId),
       templateSid: env.TWILIO_CONTENT_SID_SCHEDULE,
     },
-    inbound: new InboundEventService(db),
-    jobs: new JobService(db),
-    outbound: new OutboundService(db),
+    inbound,
+    jobs,
+    outbound,
     logger,
     workerId,
     visibilitySecs: env.WORKER_VISIBILITY_SECS,

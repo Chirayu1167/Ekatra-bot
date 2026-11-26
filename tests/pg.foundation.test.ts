@@ -41,6 +41,23 @@ describe('postgres baseline migration', () => {
     });
   });
 
+  it('creates tenant-scoped broadcast records and recipient tracking in migration v7', async () => {
+    const tables = await query<{ table_name: string }>(
+      pool(),
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name IN ('broadcasts', 'broadcast_recipients')
+       ORDER BY table_name`,
+    );
+    expect(tables.rows.map((row) => row.table_name)).toEqual([
+      'broadcast_recipients',
+      'broadcasts',
+    ]);
+    expect(PG_MIGRATIONS.find((migration) => migration.version === 7)).toMatchObject({
+      version: 7,
+      name: 'course-scoped-broadcasts',
+    });
+  });
+
   it('v6 scopes historical inbound events only when enrollment org is unambiguous', async () => {
     const db = pool();
     const org = await query<{ id: number }>(db, "SELECT id FROM organisations WHERE slug = 'default'");

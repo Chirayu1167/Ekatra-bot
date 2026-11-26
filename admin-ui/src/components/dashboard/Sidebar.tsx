@@ -39,7 +39,10 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
+  const sections = session?.role === "instructor"
+    ? DASHBOARD_SECTIONS.filter((section) => section.path !== ROUTES.BROADCASTS)
+    : DASHBOARD_SECTIONS;
 
   useEffect(() => {
     const checkMobile = () => {
@@ -81,7 +84,7 @@ export default function Sidebar() {
 
       <nav className="flex-1 overflow-y-auto py-6 px-2">
         <ul className="space-y-2">
-          {DASHBOARD_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <li key={section.name}>
               <Link
                 to={section.path}

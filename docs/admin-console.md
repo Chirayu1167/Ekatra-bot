@@ -21,6 +21,14 @@ There is no Supabase, TanStack Start, server-function, Lovable, or alternate-pro
 - **Delivery:** paginated outbound-message list with status filter and detail/attempt history.
   Lists contain no inbound text or phone numbers. Message text is shown only in admin-only detail;
   there is no staff reply box.
+- **Course broadcast:** org admins can select a published course, enter numbers manually or import
+  an `.xlsx` first-column list (up to 100), then preview eligibility and rejection counts before
+  explicitly queueing. Numbers are only selection input: every recipient must match an active
+  enrollment with recorded course consent in that organisation. Paused/completed, opted-out,
+  unmatched, duplicate, and invalid numbers are excluded. Free-form text is sent only within the
+  24-hour WhatsApp customer-service window; outside it, the approved `TWILIO_CONTENT_SID_BROADCAST`
+  template is required, with no free-form fallback. Queueing and worker-time checks use the durable
+  outbound pipeline. Delivery receipts are not learning metrics.
 - **Failures:** open failures and reason counts, inspection of attempt summaries, replay one or
   multiple selected failures, and discard with a required reason. Replay and cooldown conflicts
   are shown in plain language.
@@ -34,14 +42,18 @@ There is no Supabase, TanStack Start, server-function, Lovable, or alternate-pro
   admin-only; `/ready` and `/worker-status` themselves remain public health endpoints.
 
 Instructors see only Courses and read-only Learners navigation. `org_admin` and `platform_admin`
-see every implemented screen. The server enforces authorization; hidden navigation is not a
-security boundary.
+see every implemented screen, including course broadcasts. The server enforces authorization;
+hidden navigation is not a security boundary.
+
+The dashboard reports active enrollments, recorded completions, and open delivery failures; it
+does not infer learning from sent/delivered/read message counts. Broadcast support is implemented
+in code, but still requires staging/provider acceptance before production use.
 
 ## Excluded dashboard features and course fields
 
 No routes, navigation items, or UI remain for Telegram, the learner web app, Stripe, AI tutor UI,
-flow builder, template manager, WhatsApp integration, analytics/statistics, or demo auth. Delivery
-text is read-only. See `docs/course-model-mapping.md` for excluded/unmatched course fields:
+flow builder, provider integration management, analytics/statistics, or demo auth. Delivery text
+is read-only. See `docs/course-model-mapping.md` for excluded/unmatched course fields:
 `whatsappLessonIntro`, `whatsappCompletionMessage`, price, category, Stripe fields, and any field
 without a backend equivalent. The SQLite importer warns by field and non-empty row count for every
 unsupported source course column, without logging values. No reference dashboard files or

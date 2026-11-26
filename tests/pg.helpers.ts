@@ -17,7 +17,7 @@ export async function resetDb(pool: Pool): Promise<void> {
     `TRUNCATE organisations, courses, lessons, lesson_items, enrollments, processed_messages,
       opt_outs, learners, certificates, quiz_answers, admin_users, admin_api_keys, audit_log,
       inbound_events, jobs, outbound_messages, outbound_attempts, dead_letters,
-      course_schedules, enrollment_schedules, worker_heartbeat
+      course_schedules, enrollment_schedules, worker_heartbeat, broadcasts, broadcast_recipients
      RESTART IDENTITY CASCADE`,
   );
   await query(pool, `INSERT INTO organisations (slug, name) VALUES ('default', 'Default')`);

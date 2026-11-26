@@ -23,6 +23,7 @@ import { OutboundService } from './services/outbound.service';
 import { SchedulerService } from './services/scheduler.service';
 import { DeadLetterService } from './services/deadLetters.service';
 import { OptOutService } from './services/optout.service';
+import { BroadcastService } from './services/broadcast.service';
 
 dotenv.config({ quiet: true });
 
@@ -67,6 +68,7 @@ const outbound = new OutboundService(db);
 const schedules = new SchedulerService(db);
 const learners = new LearnerService(db);
 const optOuts = new OptOutService(db, env.OPTOUT_HASH_SECRET, env.OPTOUT_HASH_SECRET_PREVIOUS);
+const broadcasts = new BroadcastService(db, optOuts, inbound, outbound, jobs, env.TWILIO_CONTENT_SID_BROADCAST);
 // Dead-letter scope needs the same stores the worker uses (no sending here).
 const deadLetters = new DeadLetterService(db, outbound, jobs, optOuts, enrollments, courses);
 
@@ -121,6 +123,7 @@ async function buildApp() {
         certificates,
         inbound,
         outbound,
+        broadcasts,
         schedules,
         deadLetters,
         mediaDir: env.MEDIA_DIR,

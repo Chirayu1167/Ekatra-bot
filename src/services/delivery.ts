@@ -12,6 +12,8 @@ export interface ReplyMessage {
    */
   contentSid?: string;
   fallbackText?: string;
+  /** Broadcasts must never fall back to free-form text when a template is required. */
+  templateFallback?: 'text' | 'none';
   /**
    * STOP-confirmation marker, threaded through to the sender so the central opt-out guard
    * can let this one message through while blocking everything else to opted-out numbers.
@@ -72,7 +74,7 @@ export async function deliverMessages(
       );
       sids.push(sent.sid);
     } catch (err) {
-      if (message.contentSid) {
+      if (message.contentSid && message.templateFallback !== 'none') {
         // Buttons are a nicety: fall back to plain text with the typed command.
         logger.warn('whatsapp.buttons.fallback', { to: maskPhone(to) });
         const sent = await sender.sendWhatsAppMessage({

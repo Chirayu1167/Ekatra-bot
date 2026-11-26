@@ -194,6 +194,21 @@ describe('deliverMessages', () => {
       deliverMessages(sender, USER, [{ text: 'hi' }], silentLogger),
     ).rejects.toMatchObject({ status: 502 });
   });
+
+  it('does not send free-form text when an explicit template has no fallback', async () => {
+    const sender = new FakeSender();
+    sender.failIf = () => true;
+    await expect(
+      deliverMessages(
+        sender,
+        USER,
+        [{ text: 'Course update', contentSid: 'HX' + 'a'.repeat(32), templateFallback: 'none' }],
+        silentLogger,
+      ),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(sender.sent).toHaveLength(0);
+    expect(sender.calls).toBe(1);
+  });
 });
 
 describe('TwilioWhatsAppService media support', () => {

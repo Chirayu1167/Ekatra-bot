@@ -15,7 +15,9 @@ import type { OutboundService } from '../services/outbound.service';
 import type { LearnerService } from '../services/learner.service';
 import type { OptOutService } from '../services/optout.service';
 import type { CertificateService } from '../services/certificate.service';
+import type { BroadcastService } from '../services/broadcast.service';
 import { createCourseAudioUploadController } from '../controllers/courseMedia.controller';
+import { createBroadcastController } from '../controllers/broadcast.controller';
 
 export interface AdminRouterOptions {
   db: PgDb;
@@ -34,6 +36,8 @@ export interface AdminRouterOptions {
   /** Durable inbound store + outbound pipeline for learner export/delete. */
   inbound?: InboundEventService;
   outbound?: OutboundService;
+  /** Consent-checked broadcast service. Omit to leave broadcast routes unmounted. */
+  broadcasts?: BroadcastService;
   /** Publicly served media folder used for course audio uploads. */
   mediaDir?: string;
   /** Public HTTPS origin used to construct Twilio-fetchable media URLs. */
@@ -61,6 +65,7 @@ export function createAdminRouter({
   deadLetters,
   inbound,
   outbound,
+  broadcasts,
   mediaDir,
   publicBaseUrl,
   bootstrapKey,
@@ -155,6 +160,14 @@ export function createAdminRouter({
   if (outbound) {
     router.get('/delivery', manageUsers, c.listDelivery);
     router.get('/delivery/:id', manageUsers, c.getDelivery);
+  }
+
+  // Course-scoped, consent-checked broadcasts: management roles only.
+  if (broadcasts) {
+    const bc = createBroadcastController({ broadcasts, auth });
+    router.post('/broadcasts/preview', manageUsers, bc.preview);
+    router.post('/broadcasts/:id/queue', manageUsers, bc.queue);
+    router.get('/broadcasts/:id', manageUsers, bc.status);
   }
 
   // ---- Certificates (org_admin + platform_admin) --------------------------------------

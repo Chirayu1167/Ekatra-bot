@@ -23,6 +23,7 @@ import { JobService } from '../src/services/jobs.service';
 import { OutboundService } from '../src/services/outbound.service';
 import { SchedulerService } from '../src/services/scheduler.service';
 import { DeadLetterService } from '../src/services/deadLetters.service';
+import { BroadcastService } from '../src/services/broadcast.service';
 
 const AUTH_TOKEN = 'test_auth_token';
 const PUBLIC_BASE_URL = 'https://example.test';
@@ -95,6 +96,9 @@ const EXPECTED_ROUTES: { method: string; path: string; protection: string }[] = 
   { method: 'POST', path: '/admin/enrollments/:id/resume', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/delivery', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/delivery/:id', protection: 'admin:manage-users' },
+  { method: 'POST', path: '/admin/broadcasts/preview', protection: 'admin:manage-users' },
+  { method: 'POST', path: '/admin/broadcasts/:id/queue', protection: 'admin:manage-users' },
+  { method: 'GET', path: '/admin/broadcasts/:id', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/certificates', protection: 'admin:manage-users' },
   { method: 'POST', path: '/admin/certificates/:id/resend', protection: 'admin:manage-users' },
   { method: 'GET', path: '/admin/schedule-preview', protection: 'admin:manage-users' },
@@ -151,6 +155,13 @@ describe('route inventory', () => {
         certificates,
         inbound: new InboundEventService(db),
         outbound: new OutboundService(db),
+        broadcasts: new BroadcastService(
+          db,
+          optOuts,
+          new InboundEventService(db),
+          new OutboundService(db),
+          new JobService(db),
+        ),
         schedules: new SchedulerService(db),
         deadLetters: new DeadLetterService(
           db,
@@ -175,8 +186,8 @@ describe('route inventory', () => {
         if (layer.handle?.stack) return n + countRoutes(layer.handle.stack);
         return n;
       }, 0);
-    // Every inventory entry is one route layer; /media is static middleware, not a layer.
-    expect(countRoutes(router?.stack ?? [])).toBe(EXPECTED_ROUTES.length - 1);
+    // Every inventory entry is one route layer; /media is static middleware and is not inventoried.
+    expect(countRoutes(router?.stack ?? [])).toBe(EXPECTED_ROUTES.length);
   });
 
   it('unknown routes are 404, admin without credentials is 401', async () => {

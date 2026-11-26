@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import { deliverMessages, type ReplyMessage } from '../services/delivery';
 import type { CertificateService } from '../services/certificate.service';
 import type { CourseService } from '../services/course.service';
+import type { BroadcastService } from '../services/broadcast.service';
 import type { EnrollmentService } from '../services/enrollment.service';
 import type { InboundEventService } from '../services/inboundEvents.service';
 import type { Job, JobService } from '../services/jobs.service';
@@ -42,6 +43,7 @@ export interface ProcessorDeps {
   inbound: InboundEventService;
   jobs: JobService;
   outbound: OutboundService;
+  broadcasts?: BroadcastService;
   /** Voice services (STT for inbound voice notes, TTS for outbound audio). Optional. */
   voiceServices?: VoiceServices;
   /** Twilio credentials for downloading protected media URLs (voice notes). */
@@ -504,6 +506,23 @@ async function handleOutboundJob(deps: ProcessorDeps, job: Job): Promise<string>
     );
     await deps.jobs.complete(job.id);
     return 'parked_unknown';
+  }
+
+  const payloadRecipientId = Number(payload['broadcastRecipientId'] ?? NaN);
+  const broadcastRecipientId = Number.isFinite(payloadRecipientId)
+    ? payloadRecipientId
+    : await deps.broadcasts?.recipientIdForMessage(messageId);
+  if (broadcastRecipientId !== undefined) {
+    if (!deps.broadcasts) {
+      await deps.jobs.failTerminal(job.id, 'broadcast service is unavailable', 'broadcast_unavailable');
+      await deps.outbound.setStatus(messageId, 'failed');
+      return 'broadcast_unavailable';
+    }
+    const prepared = await deps.broadcasts.prepareRecipientForSend(broadcastRecipientId, messageId);
+    if (!prepared.ready) {
+      await deps.jobs.complete(job.id);
+      return `broadcast_skipped_${prepared.reason ?? 'ineligible'}`;
+    }
   }
 
   const outcome = await deliverOutbound(deps, messageId, action);

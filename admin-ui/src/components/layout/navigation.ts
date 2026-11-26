@@ -8,6 +8,7 @@ export interface NavigationItem {
 const managementNavigation: NavigationItem[] = [
   { label: "Courses", to: "/dashboard" },
   { label: "Learners", to: "/learners" },
+  { label: "Broadcasts", to: "/broadcasts" },
   { label: "Schedules", to: "/schedules" },
   { label: "Delivery", to: "/delivery" },
   { label: "Failures", to: "/failures" },

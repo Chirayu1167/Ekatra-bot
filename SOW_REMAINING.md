@@ -10,7 +10,7 @@ Strict comparison of `Ekatra_Project_Scope_and_SOW_v1.4.md` against the current 
 
 ## Code-level work packages
 
-All five SOW work packages are implemented in code with passing gates (root: 445 passed / 1 skipped / 0 failed; admin-ui: 48 passed / 0 failed; typecheck, lint, build green).
+The prior baseline recorded passing gates (root: 445 passed / 1 skipped / 0 failed; admin-ui: 48 passed / 0 failed; typecheck, lint, build green). Those counts predate the current branch changes and are not validation evidence for them.
 
 | Work package | Scope | Status |
 |---|---|---|
@@ -20,6 +20,19 @@ All five SOW work packages are implemented in code with passing gates (root: 445
 | WP3 | Delivery/recovery | [x] Durable inbound/outbound, retry/replay, scheduling |
 | WP4 | Learner/admin journey | [x] Full journey, React admin console, bounded AI |
 | WP5 | Operate/validate/handover | [-] Alerts, backup/restore proof, load test, production release, handover |
+
+### Current branch implementation (not production-accepted)
+
+The current branch adds course-specific admin broadcasts with manual number entry or `.xlsx`
+import, capped at 100 numbers per preview. A number is only a way to select an existing learner:
+the server requires a published course, active enrollment, recorded enrollment consent, and no
+global opt-out. It reports rejection counts without returning recipient numbers, requires an
+explicit review/queue confirmation, and rechecks eligibility before sending through the durable
+outbound job pipeline. Free-form text is limited to WhatsApp's 24-hour customer-service window;
+outside it, an approved `TWILIO_CONTENT_SID_BROADCAST` template is required and free-form fallback
+is disabled. The dashboard now counts active enrollments, recorded completions, and open delivery
+failures rather than treating a page of sent messages as a total. This code has not been validated
+by the current branch test/build gates, deployed, or accepted against a real provider.
 
 ## Remaining items
 
