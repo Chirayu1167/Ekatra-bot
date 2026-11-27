@@ -138,14 +138,18 @@ describe('course-scoped broadcasts', () => {
     expect(response.status).toBe(404);
   });
 
-  it('previews only active consented in-course recipients and returns reason counts without numbers', async () => {
+  it('previews anyone with a valid number: enrolled in any state, or not registered at all', async () => {
     const { db, app, orgId, inbound, optOuts } = await setup();
     await addEnrollment(db, orgId, WINDOW_USER);
     await addInbound(inbound, WINDOW_USER, 'window');
-    const paused = 'whatsapp:+919876543211';
-    await addEnrollment(db, orgId, paused, 'paused');
+    const pending = 'whatsapp:+919876543211';
+    await addEnrollment(db, orgId, pending, 'pending');
+    await addInbound(inbound, pending, 'pending');
     const noConsent = 'whatsapp:+919876543212';
     await addEnrollment(db, orgId, noConsent, 'active', false);
+    await addInbound(inbound, noConsent, 'noconsent');
+    const stranger = 'whatsapp:+919876543215';
+    await addInbound(inbound, stranger, 'stranger');
     const optedOut = 'whatsapp:+919876543213';
     await addEnrollment(db, orgId, optedOut);
     await addInbound(inbound, optedOut, 'opted-out');
@@ -157,33 +161,94 @@ describe('course-scoped broadcasts', () => {
       .post('/admin/broadcasts/preview')
       .set(auth)
       .send({
+        audience: 'numbers',
         courseId: COURSE_ID,
         message: 'A course update',
         phoneNumbers: [
-          '+919876543210',
-          '+91 98765 43210',
-          'not a number',
-          paused,
-          noConsent,
-          optedOut,
-          outsideWindow,
-          'whatsapp:+919876543215',
+          '+919876543210', '+91 98765 43210', 'not a number',
+          pending, noConsent, stranger, optedOut, outsideWindow,
         ],
       });
 
     expect(response.status).toBe(201);
-    expect(response.body.acceptedCount).toBe(1);
+    expect(response.body.acceptedCount).toBe(4);
     expect(response.body.rejected).toEqual(expect.arrayContaining([
       { reason: 'duplicate', count: 1 },
       { reason: 'invalid_number', count: 1 },
-      { reason: 'not_active', count: 1 },
-      { reason: 'consent_missing', count: 1 },
       { reason: 'opted_out', count: 1 },
       { reason: 'outside_window_template_required', count: 1 },
-      { reason: 'not_enrolled', count: 1 },
     ]));
     expect(JSON.stringify(response.body)).not.toContain('9876543215');
-    expect(response.body).not.toHaveProperty('phoneNumbers');
+  });
+
+  it('resolves a course roster server-side, honours the status filter, and sends to registered-but-pending learners', async () => {
+    const { db, app, orgId, inbound, broadcasts, jobs } = await setup();
+    const pending = 'whatsapp:+919876540001';
+    const active = 'whatsapp:+919876540002';
+    const paused = 'whatsapp:+919876540003';
+    for (const [u, st] of [[pending, 'pending'], [active, 'active'], [paused, 'paused']] as const) {
+      await addEnrollment(db, orgId, u, st);
+      await addInbound(inbound, u, u.slice(-4));
+    }
+
+    const counts = await request(app).get(`/admin/broadcasts/audience?courseId=${COURSE_ID}`).set(auth);
+    expect(counts.body).toMatchObject({ total: 3, pending: 1, active: 1, paused: 1, completed: 0 });
+
+    const all = await request(app)
+      .post('/admin/broadcasts/preview').set(auth)
+      .send({ audience: 'course', courseId: COURSE_ID, message: 'Hello' });
+    expect(all.status).toBe(201);
+    expect(all.body.acceptedCount).toBe(3);
+
+    const onlyPending = await request(app)
+      .post('/admin/broadcasts/preview').set(auth)
+      .send({ audience: 'course', courseId: COURSE_ID, statuses: ['pending'], message: 'Hello' });
+    expect(onlyPending.body.acceptedCount).toBe(1);
+
+    const queued = await request(app).post(`/admin/broadcasts/${all.body.id}/queue`).set(auth).send({});
+    expect(queued.body).toMatchObject({ queuedCount: 3, skippedCount: 0 });
+
+    // The worker-side check must let every one of them through (this used to skip silently).
+    const rows = await query<{ id: number; outbound_message_id: number }>(
+      db, 'SELECT id, outbound_message_id FROM broadcast_recipients WHERE broadcast_id = $1', [all.body.id]);
+    for (const r of rows.rows) {
+      expect(await broadcasts.prepareRecipientForSend(Number(r.id), Number(r.outbound_message_id)))
+        .toEqual({ ready: true });
+    }
+    expect(jobs).toBeDefined();
+  });
+
+  it('sends to numbers that are not registered and to all learners (no course) through the worker check', async () => {
+    const { db, app, orgId, inbound, broadcasts } = await setup();
+    const stranger = 'whatsapp:+919876540010';
+    const learner = 'whatsapp:+919876540011';
+    await addInbound(inbound, stranger, 'stranger');
+    await addEnrollment(db, orgId, learner, 'pending');
+    await addInbound(inbound, learner, 'learner');
+
+    const preview = await request(app)
+      .post('/admin/broadcasts/preview').set(auth)
+      .send({ audience: 'all_learners', message: 'Hi all', phoneNumbers: [stranger] });
+    expect(preview.body).toMatchObject({ audience: 'all_learners', acceptedCount: 2 });
+    await request(app).post(`/admin/broadcasts/${preview.body.id}/queue`).set(auth).send({});
+    const rows = await query<{ id: number; outbound_message_id: number }>(
+      db, 'SELECT id, outbound_message_id FROM broadcast_recipients WHERE broadcast_id = $1', [preview.body.id]);
+    expect(rows.rows).toHaveLength(2);
+    for (const r of rows.rows) {
+      expect(await broadcasts.prepareRecipientForSend(Number(r.id), Number(r.outbound_message_id)))
+        .toEqual({ ready: true });
+    }
+  });
+
+  it('rejects a course audience without a course and an empty roster', async () => {
+    const { app } = await setup();
+    const noCourse = await request(app)
+      .post('/admin/broadcasts/preview').set(auth).send({ audience: 'course', message: 'x' });
+    expect(noCourse.status).toBe(400);
+    const empty = await request(app)
+      .post('/admin/broadcasts/preview').set(auth)
+      .send({ audience: 'course', courseId: COURSE_ID, message: 'x' });
+    expect(empty.status).toBe(409);
   });
 
   it('queues through the durable outbound job and suppresses a recipient if eligibility changes', async () => {

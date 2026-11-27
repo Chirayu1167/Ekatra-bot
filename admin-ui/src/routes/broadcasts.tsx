@@ -7,6 +7,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   adminApi,
   MAX_BROADCAST_RECIPIENTS,
+  type BroadcastAudience,
+  type BroadcastEnrollmentStatus,
   type BroadcastPreview,
   type BroadcastRejectionReason,
 } from "@/api/admin";
@@ -26,13 +28,27 @@ export const Route = createFileRoute("/broadcasts")({
 const REJECTION_LABELS: Record<BroadcastRejectionReason, string> = {
   invalid_number: "Invalid international number",
   duplicate: "Duplicate number",
-  not_enrolled: "No enrollment in this course",
+  not_enrolled: "Not a registered learner",
   not_active: "Enrollment is not active",
-  consent_missing: "No recorded course consent",
-  opted_out: "Learner opted out",
-  outside_window_template_required: "Outside the 24-hour window; no approved template is configured",
+  consent_missing: "No recorded consent",
+  opted_out: "Learner opted out (STOP)",
+  outside_window_template_required:
+    "Hasn't messaged in 24 hours and no approved broadcast template is set (TWILIO_CONTENT_SID_BROADCAST)",
   course_unavailable: "Course is unavailable",
 };
+
+const AUDIENCE_OPTIONS: Array<{ value: BroadcastAudience; title: string; hint: string }> = [
+  { value: "course", title: "Learners of a course", hint: "Everyone who registered for the selected course." },
+  { value: "all_learners", title: "All registered learners", hint: "Everyone registered in any course." },
+  { value: "numbers", title: "Specific numbers only", hint: "Type or import any numbers, registered or not." },
+];
+
+const STATUS_OPTIONS: Array<{ value: BroadcastEnrollmentStatus; label: string }> = [
+  { value: "pending", label: "Registered, not started" },
+  { value: "active", label: "In progress" },
+  { value: "paused", label: "Paused" },
+  { value: "completed", label: "Completed" },
+];
 
 function firstColumnPhones(fileRows: string[]): string[] {
   const rows = fileRows.map((row) => row.trim()).filter(Boolean);
@@ -70,7 +86,11 @@ function rejectionText(preview: BroadcastPreview): string {
 function BroadcastsScreen() {
   const { session } = useAuth();
   const canManage = session?.role === "org_admin" || session?.role === "platform_admin";
+  const [audience, setAudience] = React.useState<BroadcastAudience>("course");
   const [courseId, setCourseId] = React.useState("");
+  const [statuses, setStatuses] = React.useState<BroadcastEnrollmentStatus[]>(
+    STATUS_OPTIONS.map((option) => option.value),
+  );
   const [message, setMessage] = React.useState("");
   const [manualNumbers, setManualNumbers] = React.useState("");
   const [fileNumbers, setFileNumbers] = React.useState<string[]>([]);
@@ -85,14 +105,33 @@ function BroadcastsScreen() {
     queryFn: () => adminApi.courses.list("published"),
     enabled: canManage,
   });
+  const usesRoster = audience !== "numbers";
+  const rosterCourseId = audience === "course" && courseId ? Number(courseId) : undefined;
+  const counts = useQuery({
+    queryKey: ["broadcast-audience", audience, rosterCourseId ?? null],
+    queryFn: () => adminApi.broadcasts.audience(rosterCourseId),
+    enabled: canManage && usesRoster && (audience === "all_learners" || rosterCourseId !== undefined),
+  });
   const phoneNumbers = React.useMemo(
     () => [...manualNumbers.split(/\r?\n/).map((value) => value.trim()).filter(Boolean), ...fileNumbers],
     [manualNumbers, fileNumbers],
   );
+  const rosterSize = counts.data
+    ? statuses.reduce((sum, status) => sum + counts.data[status], 0)
+    : undefined;
+
+  const resetPreview = () => {
+    setPreview(null);
+    setQueued(false);
+    setConfirming(false);
+  };
+
   const previewMutation = useMutation({
     mutationFn: () =>
       adminApi.broadcasts.preview({
-        courseId: courseId && courseId !== "all" ? Number(courseId) : undefined,
+        audience,
+        courseId: courseId ? Number(courseId) : undefined,
+        statuses: usesRoster ? statuses : undefined,
         message: message.trim(),
         phoneNumbers,
       }),
@@ -130,11 +169,26 @@ function BroadcastsScreen() {
       const phones = await readPhoneWorkbook(file);
       setFileNumbers(phones);
       setFileLabel(`${file.name} (${phones.length} numbers)`);
-      setPreview(null);
+      resetPreview();
     } catch (error) {
       setInputError(error instanceof Error ? error.message : "The workbook could not be read.");
     }
   };
+
+  const toggleStatus = (value: BroadcastEnrollmentStatus) => {
+    setStatuses((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
+    resetPreview();
+  };
+
+  const audienceReady =
+    audience === "numbers"
+      ? phoneNumbers.length > 0
+      : (audience === "course" ? Boolean(courseId) : true) &&
+        statuses.length > 0 &&
+        (phoneNumbers.length > 0 || rosterSize !== 0);
+  const tooMany = phoneNumbers.length > MAX_BROADCAST_RECIPIENTS;
 
   const requestPreview = () => {
     setInputError("");
@@ -150,10 +204,13 @@ function BroadcastsScreen() {
     );
   }
 
+  const rejectedTotal = preview ? preview.rejected.reduce((sum, item) => sum + item.count, 0) : 0;
+
   return (
     <ConsoleShell title="Broadcast & Invitations">
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Send a notice or invitation to enrolled learners or any outside numbers from manual entry or Excel import.
+        Send a WhatsApp notice or invitation to a course's registered learners, to everyone registered, or to any
+        numbers you type or import from Excel.
       </p>
 
       {courses.isError && <ErrorState message={errorMessage(courses.error)} />}
@@ -165,24 +222,81 @@ function BroadcastsScreen() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(16rem,0.8fr)]">
         <Card>
           <CardContent className="space-y-5 p-5">
-            <label className="block space-y-2 text-sm font-medium">
-              Course
-              <select
-                aria-label="Course"
-                className="h-10 w-full rounded-md border bg-background px-3 font-normal"
-                onChange={(event) => {
-                  setCourseId(event.target.value);
-                  setPreview(null);
-                  setQueued(false);
-                }}
-                value={courseId}
-              >
-                <option value="">All registered learners (all courses)</option>
-                {(courses.data?.courses ?? []).map((course) => (
-                  <option key={course.id} value={course.id}>{course.title}</option>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Send to</legend>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {AUDIENCE_OPTIONS.map((option) => (
+                  <label
+                    className={`cursor-pointer rounded-md border p-3 text-sm ${audience === option.value ? "border-primary bg-primary/5" : ""}`}
+                    key={option.value}
+                  >
+                    <input
+                      checked={audience === option.value}
+                      className="mr-2"
+                      name="broadcast-audience"
+                      onChange={() => {
+                        setAudience(option.value);
+                        resetPreview();
+                      }}
+                      type="radio"
+                      value={option.value}
+                    />
+                    <span className="font-medium">{option.title}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{option.hint}</span>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </fieldset>
+
+            {audience !== "all_learners" && (
+              <label className="block space-y-2 text-sm font-medium">
+                {audience === "course" ? "Course" : "Course (optional, for reporting)"}
+                <select
+                  aria-label="Course"
+                  className="h-10 w-full rounded-md border bg-background px-3 font-normal"
+                  onChange={(event) => {
+                    setCourseId(event.target.value);
+                    resetPreview();
+                  }}
+                  value={courseId}
+                >
+                  <option value="">{audience === "course" ? "Select a published course" : "No course"}</option>
+                  {(courses.data?.courses ?? []).map((course) => (
+                    <option key={course.id} value={course.id}>{course.title}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {usesRoster && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Learner status</legend>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {STATUS_OPTIONS.map((option) => (
+                    <label className="flex items-center gap-2 text-sm" key={option.value}>
+                      <input
+                        checked={statuses.includes(option.value)}
+                        onChange={() => toggleStatus(option.value)}
+                        type="checkbox"
+                      />
+                      {option.label}
+                      {counts.data && (
+                        <span className="text-xs text-muted-foreground">({counts.data[option.value]})</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground" role="status">
+                  {audience === "course" && !courseId
+                    ? "Choose a course to see who is registered."
+                    : counts.isLoading
+                      ? "Counting registered learners…"
+                      : rosterSize !== undefined
+                        ? `${rosterSize} registered learner${rosterSize === 1 ? "" : "s"} selected before opt-out and window checks.`
+                        : ""}
+                </p>
+              </fieldset>
+            )}
 
             <label className="block space-y-2 text-sm font-medium">
               Message
@@ -192,9 +306,9 @@ function BroadcastsScreen() {
                 maxLength={1024}
                 onChange={(event) => {
                   setMessage(event.target.value);
-                  setPreview(null);
+                  resetPreview();
                 }}
-                placeholder="Write a short update about this course"
+                placeholder="Write a short update or invitation"
                 value={message}
               />
               <span className="block text-xs font-normal text-muted-foreground">
@@ -204,14 +318,14 @@ function BroadcastsScreen() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium" htmlFor="manual-broadcast-numbers">
-                Add phone numbers manually
+                {usesRoster ? "Extra phone numbers (optional)" : "Phone numbers"}
               </label>
               <textarea
                 id="manual-broadcast-numbers"
                 className="min-h-24 w-full resize-y rounded-md border bg-background p-3 text-sm"
                 onChange={(event) => {
                   setManualNumbers(event.target.value);
-                  setPreview(null);
+                  resetPreview();
                 }}
                 placeholder={"+919876543210\n+14155550123"}
                 value={manualNumbers}
@@ -239,12 +353,11 @@ function BroadcastsScreen() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
               <span className="text-sm text-muted-foreground">
-                {phoneNumbers.length} of {MAX_BROADCAST_RECIPIENTS} numbers selected
+                {phoneNumbers.length} typed/imported number{phoneNumbers.length === 1 ? "" : "s"} (max {MAX_BROADCAST_RECIPIENTS} per broadcast)
               </span>
               <Button
                 disabled={
-                  !message.trim() || phoneNumbers.length === 0 ||
-                  phoneNumbers.length > MAX_BROADCAST_RECIPIENTS ||
+                  !message.trim() || !audienceReady || tooMany ||
                   previewMutation.isPending || queueMutation.isPending
                 }
                 onClick={requestPreview}
@@ -260,13 +373,14 @@ function BroadcastsScreen() {
             <CardContent className="space-y-3 p-5">
               <h2 className="font-semibold">Delivery rules</h2>
               <p className="text-sm text-muted-foreground">
-                All valid phone numbers can receive a notice or course invitation. Opt-outs are always excluded.
+                Anyone with a valid number can be messaged, registered or not. People who sent STOP are always excluded.
               </p>
               <p className="text-sm text-muted-foreground">
-                Free-form text is sent within the learner’s 24-hour WhatsApp window, or using an approved template.
+                Free-form text is only delivered within 24 hours of the person's last WhatsApp message to you.
+                Otherwise an approved broadcast template is used; without one those numbers are not sent.
               </p>
               <p className="text-sm text-muted-foreground">
-                Review the match counts before queueing. The server checks eligibility again immediately before sending.
+                Review the counts before queueing. Opt-outs and the 24-hour window are checked again right before each send.
               </p>
             </CardContent>
           </Card>
@@ -277,8 +391,8 @@ function BroadcastsScreen() {
                 <h2 className="font-semibold">Recipient review</h2>
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   <div><dt className="text-muted-foreground">Eligible</dt><dd className="text-lg font-semibold">{preview.acceptedCount}</dd></div>
-                  <div><dt className="text-muted-foreground">Template needed</dt><dd className="text-lg font-semibold">{preview.templateCount}</dd></div>
-                  <div><dt className="text-muted-foreground">Not eligible</dt><dd className="text-lg font-semibold">{preview.rejected.reduce((sum, item) => sum + item.count, 0)}</dd></div>
+                  <div><dt className="text-muted-foreground">Via template</dt><dd className="text-lg font-semibold">{preview.templateCount}</dd></div>
+                  <div><dt className="text-muted-foreground">Not eligible</dt><dd className="text-lg font-semibold">{rejectedTotal}</dd></div>
                 </dl>
                 {preview.rejected.length > 0 ? (
                   <ul aria-label="Rejected recipient reasons" className="space-y-1 border-t pt-3 text-sm">
@@ -289,8 +403,15 @@ function BroadcastsScreen() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="border-t pt-3 text-sm text-muted-foreground">All numbers match eligible learners.</p>
+                  <p className="border-t pt-3 text-sm text-muted-foreground">Every selected number can receive this message.</p>
                 )}
+                {!preview.templateConfigured &&
+                  preview.rejected.some((item) => item.reason === "outside_window_template_required") && (
+                    <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground" role="note">
+                      Numbers that haven't messaged in the last 24 hours need an approved WhatsApp template.
+                      Set <code>TWILIO_CONTENT_SID_BROADCAST</code> on the server to reach them.
+                    </p>
+                  )}
                 <p className="text-xs text-muted-foreground">Phone numbers are not shown in the server review.</p>
                 {queued ? (
                   <div className="space-y-3 border-t pt-3" aria-live="polite">
@@ -322,10 +443,10 @@ function BroadcastsScreen() {
       {confirming && preview && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="presentation">
           <section aria-labelledby="broadcast-confirm-title" aria-modal="true" className="w-full max-w-md space-y-4 rounded-lg bg-background p-6 shadow-xl" role="dialog">
-            <h2 className="text-lg font-semibold" id="broadcast-confirm-title">Queue this course notice?</h2>
+            <h2 className="text-lg font-semibold" id="broadcast-confirm-title">Queue this broadcast?</h2>
             <p className="text-sm text-muted-foreground">
-              This queues up to {preview.acceptedCount} messages for eligible learners in the selected course.
-              Eligibility is checked again by the worker before each send.
+              This queues {preview.acceptedCount} WhatsApp message{preview.acceptedCount === 1 ? "" : "s"}.
+              Opt-outs and the 24-hour window are checked again by the worker before each send.
             </p>
             <div className="flex justify-end gap-2">
               <Button disabled={queueMutation.isPending} onClick={() => setConfirming(false)} variant="outline">Cancel</Button>

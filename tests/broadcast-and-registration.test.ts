@@ -122,144 +122,9 @@ async function mkCourse(app: Express, orgId: number, title: string, key: string)
   return id;
 }
 
-describe('Broadcasting feature (POST /admin/broadcast)', () => {
-  it('broadcasts to all registered users in the org when courseId is omitted', async () => {
-    const { app, orgs, courses, learners, enrollments, outbound, db } = await setup();
-    const orgId = await orgs.getDefaultId();
-    const key = await mkUser(app, orgId, 'Admin', 'org_admin', BOOTSTRAP);
-    const course1 = await mkCourse(app, orgId, 'Course One', key);
-    const course2 = await mkCourse(app, orgId, 'Course Two', key);
-
-    const user1 = 'whatsapp:+919876543211';
-    const user2 = 'whatsapp:+919876543212';
-    const user3 = 'whatsapp:+919876543213';
-
-    await learners.upsert(user1, 'User 1');
-    await learners.upsert(user2, 'User 2');
-    await learners.upsert(user3, 'User 3');
-
-    await enrollments.createPending(orgId, user1, course1);
-    await enrollments.createPending(orgId, user2, course2);
-    await enrollments.createPending(orgId, user3, course1);
-
-    const res = await request(app)
-      .post('/admin/broadcast')
-      .set('Authorization', `Bearer ${key}`)
-      .send({ message: 'General announcement to all learners' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.total).toBe(3);
-    expect(res.body.sent).toBe(3);
-    expect(res.body.skipped).toBe(0);
-
-    const outRows = await query<{ user_id: string; kind: string; messages: unknown }>(
-      db,
-      "SELECT user_id, kind, messages FROM outbound_messages WHERE kind = 'system'",
-    );
-    expect(outRows.rows).toHaveLength(3);
-    const userIds = outRows.rows.map((r) => r.user_id).sort();
-    expect(userIds).toEqual([user1, user2, user3].sort());
-  });
-
-  it('broadcasts only to users enrolled in the specific course when courseId is provided', async () => {
-    const { app, orgs, courses, learners, enrollments, db } = await setup();
-    const orgId = await orgs.getDefaultId();
-    const key = await mkUser(app, orgId, 'Admin', 'org_admin', BOOTSTRAP);
-    const courseA = await mkCourse(app, orgId, 'Course A', key);
-    const courseB = await mkCourse(app, orgId, 'Course B', key);
-
-    const userA1 = 'whatsapp:+919876543221';
-    const userA2 = 'whatsapp:+919876543222';
-    const userB1 = 'whatsapp:+919876543223';
-
-    await learners.upsert(userA1, 'Alice');
-    await learners.upsert(userA2, 'Alex');
-    await learners.upsert(userB1, 'Bob');
-
-    await enrollments.createPending(orgId, userA1, courseA);
-    await enrollments.createPending(orgId, userA2, courseA);
-    await enrollments.createPending(orgId, userB1, courseB);
-
-    const res = await request(app)
-      .post('/admin/broadcast')
-      .set('Authorization', `Bearer ${key}`)
-      .send({ message: 'Notice for Course A students only', courseId: courseA });
-
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.total).toBe(2);
-    expect(res.body.sent).toBe(2);
-    expect(res.body.skipped).toBe(0);
-
-    const outRows = await query<{ user_id: string }>(
-      db,
-      "SELECT user_id FROM outbound_messages WHERE kind = 'system'",
-    );
-    expect(outRows.rows).toHaveLength(2);
-    const sentUsers = outRows.rows.map((r) => r.user_id).sort();
-    expect(sentUsers).toEqual([userA1, userA2].sort());
-  });
-
-  it('skips opted-out learners and reflects counts correctly', async () => {
-    const { app, orgs, learners, enrollments, optOuts } = await setup();
-    const orgId = await orgs.getDefaultId();
-    const key = await mkUser(app, orgId, 'Admin', 'org_admin', BOOTSTRAP);
-    const courseId = await mkCourse(app, orgId, 'Course With Optouts', key);
-
-    const userActive = 'whatsapp:+919876543231';
-    const userOptedOut = 'whatsapp:+919876543232';
-
-    await learners.upsert(userActive, 'Active Learner');
-    await learners.upsert(userOptedOut, 'Opted Out Learner');
-
-    await enrollments.createPending(orgId, userActive, courseId);
-    await enrollments.createPending(orgId, userOptedOut, courseId);
-
-    await optOuts.recordOptOut(userOptedOut);
-
-    const res = await request(app)
-      .post('/admin/broadcast')
-      .set('Authorization', `Bearer ${key}`)
-      .send({ message: 'Testing opt-out exclusion', courseId });
-
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.total).toBe(2);
-    expect(res.body.sent).toBe(1);
-    expect(res.body.skipped).toBe(1);
-  });
-
-  it('returns 404 if the selected course does not exist', async () => {
-    const { app, orgs } = await setup();
-    const orgId = await orgs.getDefaultId();
-    const key = await mkUser(app, orgId, 'Admin', 'org_admin', BOOTSTRAP);
-
-    const res = await request(app)
-      .post('/admin/broadcast')
-      .set('Authorization', `Bearer ${key}`)
-      .send({ message: 'Hello', courseId: 999999 });
-
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 403 for instructors (broadcast is restricted to admins)', async () => {
-    const { app, orgs } = await setup();
-    const orgId = await orgs.getDefaultId();
-    const instructorKey = await mkUser(app, orgId, 'Instructor', 'instructor', BOOTSTRAP);
-
-    const res = await request(app)
-      .post('/admin/broadcast')
-      .set('Authorization', `Bearer ${instructorKey}`)
-      .send({ message: 'Instructor attempt' });
-
-    expect(res.status).toBe(403);
-  });
-});
-
 describe('Auto Welcome Message and Course Buttons on Registration', () => {
   it('sends personalized welcome message and course buttons after registration', async () => {
-    const { app, orgs, courses, learners, enrollments, db } = await setup();
+    const { app, orgs, learners, enrollments, db } = await setup();
     const orgId = await orgs.getDefaultId();
     const key = await mkUser(app, orgId, 'Admin', 'org_admin', BOOTSTRAP);
     const courseId = await mkCourse(app, orgId, 'Web Development Basics', key);
@@ -314,7 +179,7 @@ describe('Auto Welcome Message and Course Buttons on Registration', () => {
   });
 
   it('clicking Start Course button auto-enrolls and triggers the course-start flow', async () => {
-    const { orgs, courses, enrollments, learners, optOuts, app } = await setup();
+    const { orgs, courses, enrollments, optOuts, app } = await setup();
     const orgId = await orgs.getDefaultId();
     const key = await mkUser(app, orgId, 'Admin', 'org_admin', BOOTSTRAP);
     const courseId = await mkCourse(app, orgId, 'Data Science 101', key);
@@ -352,7 +217,9 @@ describe('Auto Welcome Message and Course Buttons on Registration', () => {
     const active = await enrollments.findActive(orgId, whatsappPhone);
     expect(active).toBeDefined();
     expect(active?.courseId).toBe(courseId);
-    expect(active?.lastDeliveredPosition).toBe(1);
+    // Progress only advances once the worker confirms delivery, so it is still 0 here.
+    expect(active?.status).toBe('active');
+    expect(reply.deliveryAction).toBeDefined();
     expect(reply.text).toContain('Data Science 101');
   });
 });

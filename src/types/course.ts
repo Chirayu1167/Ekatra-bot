@@ -279,7 +279,7 @@ export interface Enrollment {
   updatedAt: string;
   completedAt: string | null;
   consentAt: string | null;
-  consentSource: 'web_registration' | 'admin_attestation' | null;
+  consentSource: 'web_registration' | 'admin_attestation' | 'whatsapp_bot' | null;
   consentAdminId: number | null;
 }
 

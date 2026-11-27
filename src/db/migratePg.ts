@@ -103,6 +103,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS broadcast_recipients_dedupe ON broadcast_recip
 UPDATE enrollments SET consent_at = now(), consent_source = 'web_registration' WHERE consent_at IS NULL;
 `;
 
+/**
+ * v9: the WhatsApp bot records `whatsapp_bot` as consent source when a learner starts a course
+ * directly from chat, but the v4 CHECK only allowed two values, so that insert failed.
+ * Also records which audience a broadcast targeted (course roster / custom numbers / all learners).
+ */
+export const BROADCAST_AUDIENCE_SQL = `
+ALTER TABLE enrollments DROP CONSTRAINT IF EXISTS enrollments_consent_source_check;
+ALTER TABLE enrollments ADD CONSTRAINT enrollments_consent_source_check
+  CHECK (consent_source IN ('web_registration', 'admin_attestation', 'whatsapp_bot'));
+ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'numbers'
+  CHECK (audience IN ('course', 'numbers', 'all_learners'));
+UPDATE broadcast_recipients br SET user_id = e.user_id
+  FROM enrollments e WHERE br.enrollment_id = e.id AND br.user_id IS NULL;
+`;
+
 /** Ordered Postgres migrations. Append only; checksums reject silent edits to shipped ones. */
 export const PG_MIGRATIONS: readonly PgMigration[] = [
   { version: 1, name: 'baseline-v7-equivalent', sql: PG_BASELINE_SQL },
@@ -134,6 +149,11 @@ export const PG_MIGRATIONS: readonly PgMigration[] = [
     version: 8,
     name: 'broadcast-optional-course',
     sql: BROADCAST_OPTIONAL_COURSE_SQL,
+  },
+  {
+    version: 9,
+    name: 'broadcast-audience-and-bot-consent-source',
+    sql: BROADCAST_AUDIENCE_SQL,
   },
 ];
 

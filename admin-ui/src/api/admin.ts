@@ -1,7 +1,7 @@
 import { request } from './client';
 
 export type AdminRole = 'platform_admin' | 'org_admin' | 'instructor';
-export const MAX_BROADCAST_RECIPIENTS = 100;
+export const MAX_BROADCAST_RECIPIENTS = 500;
 export type EnrollmentStatus = 'pending' | 'active' | 'paused' | 'completed';
 export type CourseStatus = 'draft' | 'published';
 
@@ -163,10 +163,31 @@ export type BroadcastRejectionReason =
   | 'outside_window_template_required'
   | 'course_unavailable';
 
+export type BroadcastAudience = 'course' | 'numbers' | 'all_learners';
+export type BroadcastEnrollmentStatus = 'pending' | 'active' | 'paused' | 'completed';
+
+export interface BroadcastAudienceCounts {
+  total: number;
+  pending: number;
+  active: number;
+  paused: number;
+  completed: number;
+}
+
+export interface BroadcastPreviewRequest {
+  audience: BroadcastAudience;
+  courseId?: number;
+  statuses?: BroadcastEnrollmentStatus[];
+  message: string;
+  phoneNumbers: string[];
+}
+
 export interface BroadcastPreview {
   id: number;
+  audience: BroadcastAudience;
   acceptedCount: number;
   templateCount: number;
+  templateConfigured: boolean;
   rejected: Array<{ reason: BroadcastRejectionReason; count: number }>;
 }
 
@@ -422,7 +443,11 @@ export const adminApi = {
       }),
   },
   broadcasts: {
-    preview: (body: { courseId?: number; message: string; phoneNumbers: string[] }) =>
+    audience: (courseId?: number) =>
+      request<BroadcastAudienceCounts>(
+        `/admin/broadcasts/audience${queryString({ courseId })}`,
+      ),
+    preview: (body: BroadcastPreviewRequest) =>
       request<BroadcastPreview>('/admin/broadcasts/preview', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -437,12 +462,5 @@ export const adminApi = {
   status: {
     readiness: () => request<Record<string, unknown>>('/ready'),
     worker: () => request<Record<string, unknown>>('/worker-status'),
-  },
-  broadcast: {
-    send: (body: { message: string; courseId?: number }) =>
-      request<{ ok: true; sent: number; skipped: number; total: number }>('/admin/broadcast', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
   },
 };

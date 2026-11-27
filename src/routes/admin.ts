@@ -158,7 +158,6 @@ export function createAdminRouter({
   // ---- Delivery (org_admin + platform_admin) ------------------------------------------
 
   if (outbound) {
-    router.post('/broadcast', manageUsers, c.broadcast);
     router.get('/delivery', manageUsers, c.listDelivery);
     router.get('/delivery/:id', manageUsers, c.getDelivery);
   }
@@ -166,6 +165,7 @@ export function createAdminRouter({
   // Course-scoped, consent-checked broadcasts: management roles only.
   if (broadcasts) {
     const bc = createBroadcastController({ broadcasts, auth });
+    router.get('/broadcasts/audience', manageUsers, bc.audience);
     router.post('/broadcasts/preview', manageUsers, bc.preview);
     router.post('/broadcasts/:id/queue', manageUsers, bc.queue);
     router.get('/broadcasts/:id', manageUsers, bc.status);

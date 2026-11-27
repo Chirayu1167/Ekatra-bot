@@ -4,13 +4,15 @@ import { BadRequestError, NotFoundError } from '../errors';
 import { principal } from '../middleware/adminAuth';
 import type { AdminAuthService } from '../services/adminAuth.service';
 import type { BroadcastService } from '../services/broadcast.service';
-import { MAX_BROADCAST_RECIPIENTS } from '../services/broadcast.service';
+import { BROADCAST_ENROLLMENT_STATUSES, MAX_BROADCAST_RECIPIENTS } from '../services/broadcast.service';
 import { orgId } from './admin.controller';
 
 const previewBody = z.object({
+  audience: z.enum(['course', 'numbers', 'all_learners']).optional(),
   courseId: z.number().int().positive().optional(),
+  statuses: z.array(z.enum(BROADCAST_ENROLLMENT_STATUSES)).max(BROADCAST_ENROLLMENT_STATUSES.length).optional(),
   message: z.string().trim().min(1).max(1024),
-  phoneNumbers: z.array(z.string().max(64)).min(1).max(MAX_BROADCAST_RECIPIENTS),
+  phoneNumbers: z.array(z.string().max(64)).max(MAX_BROADCAST_RECIPIENTS).default([]),
 });
 
 function idParam(req: Request): number {
@@ -38,7 +40,7 @@ export function createBroadcastController({
       const parsed = previewBody.safeParse(req.body);
       if (!parsed.success) {
         throw new BadRequestError(
-          `Provide a published course, message (up to 1024 characters), and 1-${MAX_BROADCAST_RECIPIENTS} phone numbers.`,
+          `Provide a message (up to 1024 characters), choose who receives it, and keep manual numbers to ${MAX_BROADCAST_RECIPIENTS} or fewer.`,
         );
       }
       const actor = principal(req);
@@ -53,6 +55,16 @@ export function createBroadcastController({
         `broadcast:${result.id} accepted:${result.acceptedCount} rejected:${result.rejected.reduce((sum, item) => sum + item.count, 0)}`,
       );
       res.status(201).json(result);
+    }) satisfies RequestHandler,
+
+    audience: (async (req, res) => {
+      const raw = req.query['courseId'];
+      let courseId: number | undefined;
+      if (typeof raw === 'string' && raw !== '') {
+        if (!/^\d+$/.test(raw)) throw new BadRequestError('Invalid course');
+        courseId = Number(raw);
+      }
+      res.json(await broadcasts.audienceCounts(orgId(req), courseId));
     }) satisfies RequestHandler,
 
     queue: (async (req, res) => {

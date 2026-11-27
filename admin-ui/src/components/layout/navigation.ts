@@ -13,7 +13,6 @@ const managementNavigation: NavigationItem[] = [
   { label: "Delivery", to: "/delivery" },
   { label: "Failures", to: "/failures" },
   { label: "Certificates", to: "/certificates" },
-  { label: "Broadcast", to: "/broadcast" },
   { label: "Users and API keys", to: "/users" },
   { label: "Status", to: "/status" },
 ];

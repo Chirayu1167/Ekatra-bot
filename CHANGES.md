@@ -93,3 +93,12 @@
   `admin-ui/package.json`, `admin-ui/package-lock.json`.
 - Runtime/project configuration: `package.json`, `.env.example`, `CHANGES.md`.
 - Documentation and support: `README.md`, `scripts/check-admin-ui-deps.cjs`.
+
+## Broadcast overhaul
+
+- Audiences: course roster (server-resolved, filter by registered/in-progress/paused/completed), all registered learners, or any typed/imported numbers (+ optional extras on top of a roster). Opt-outs always excluded; 24-hour window / approved template still enforced.
+- Fixed: registered-but-not-started (pending) learners and "no recorded consent" rows were blocked; registration is consent, so enrollment status/consent timestamp no longer gate an admin notice.
+- Fixed: worker send-time check joined enrollments/courses with inner joins, so non-enrolled numbers and all-learner broadcasts were silently skipped after showing as eligible.
+- Fixed: migration v9 widens `consent_source` CHECK to allow `whatsapp_bot` (starting a course from chat violated the old constraint).
+- Removed the duplicate legacy `/admin/broadcast` endpoint and "Broadcast" screen (it bypassed the window/template and never delivered reliably).
+- New `GET /admin/broadcasts/audience?courseId=` counts; limit raised to 500 per broadcast.
